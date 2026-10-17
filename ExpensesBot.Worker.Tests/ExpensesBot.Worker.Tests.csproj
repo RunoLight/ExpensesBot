@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ExpensesBot.Worker\ExpensesBot.Worker.csproj" />
+    <ProjectReference Include="..\ExpensesBot.Data\ExpensesBot.Data.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ExpensesBot.Api\ExpensesBot.Api.csproj" />
+    <ProjectReference Include="..\ExpensesBot.Data\ExpensesBot.Data.csproj" />
+  </ItemGroup>
+
+</Project>
