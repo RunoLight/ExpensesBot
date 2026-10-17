@@ -1,0 +1,57 @@
+
+name: Deploy ExpensesBot Client
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Publish Blazor WebAssembly
+        run: dotnet publish ExpensesBot.Client/ExpensesBot.Client.csproj -c Release
+
+      - name: Prepare GitHub Pages files
+        shell: bash
+        run: |
+          PUBLISH_DIR="ExpensesBot.Client/bin/Release/net10.0/publish/wwwroot"
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+
+          test -f "$PUBLISH_DIR/index.html"
+
+          sed -i "s|<base href=\"/\" />|<base href=\"/${REPO_NAME}/\" />|" "$PUBLISH_DIR/index.html"
+
+          cp "$PUBLISH_DIR/index.html" "$PUBLISH_DIR/404.html"
+          touch "$PUBLISH_DIR/.nojekyll"
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ExpensesBot.Client/bin/Release/net10.0/publish/wwwroot
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
