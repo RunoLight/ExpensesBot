@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.idea/
+**/*.user
+.git/
+.github/
+.gigacode/
+data/
+*.db
+TestResults/
+.env
+ExpensesBot.Client/
+*.Tests/

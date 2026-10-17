@@ -1,0 +1,69 @@
+## Environment variables
+.env
+
+## User-specific IDE settings
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+## Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+## Visual Studio cache/options
+.vs/
+.vscode/
+*.csproj.user
+
+## Visual Studio profiler
+*.psess
+*.vsp
+*.vspx
+*.sap
+
+## NuGet Packages
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+
+## Visual Studio cache files
+*.cache
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## StyleCop Settings
+StyleCopReports.xml
+StyleCopReports.json
+
+## Built Service Services
+[Bb]uild/[Ll]og*.xml
+
+## Rider
+.idea/
+*.sln.iml
+
+## Local SQLite databases
+data/
+*.db
+*.db-shm
+*.db-wal
+
+## AI assistant working files
+.gigacode/
+
+## Test results
+TestResults/
