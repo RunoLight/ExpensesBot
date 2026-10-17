@@ -1,0 +1,42 @@
+# Code style for the whole solution. Mostly the .NET SDK defaults, written down
+# so every editor formats the same way.
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{json,yml,yaml,csproj,props,slnx,xml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{cs,razor}]
+# Namespaces and usings
+csharp_style_namespace_declarations = file_scoped:suggestion
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:suggestion
+
+# Modern language features
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_prefer_primary_constructors = true:suggestion
+dotnet_style_prefer_collection_expression = true:suggestion
+csharp_prefer_simple_using_statement = true:suggestion
+
+# Braces and new lines (Allman, the .NET default)
+csharp_new_line_before_open_brace = all
+csharp_prefer_braces = when_multiline:suggestion
+
+# Naming: _camelCase private fields are allowed, PascalCase for everything public
+dotnet_naming_rule.public_members_pascal_case.severity = suggestion
+dotnet_naming_rule.public_members_pascal_case.symbols = public_symbols
+dotnet_naming_rule.public_members_pascal_case.style = pascal_case
+dotnet_naming_symbols.public_symbols.applicable_kinds = property, method, field, event, class, struct, interface, enum, delegate
+dotnet_naming_symbols.public_symbols.applicable_accessibilities = public, internal, protected
+dotnet_naming_style.pascal_case.capitalization = pascal_case
