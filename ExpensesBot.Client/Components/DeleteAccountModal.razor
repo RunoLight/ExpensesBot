@@ -1,0 +1,22 @@
+<Modal Title="⚠️ Удалить аккаунт" OnClose="OnClose">
+    <ChildContent>
+        <p>Удалить аккаунт и все данные на сервере: операции, категории, бюджеты, цели и теги?</p>
+        <p class="warning-text">Это действие нельзя отменить.</p>
+        <label for="delete-confirm-input">Введите <code>@ConfirmWord</code> для подтверждения</label>
+        <input id="delete-confirm-input" class="form-control" placeholder="@ConfirmWord" @bind="confirmText" @bind:event="oninput" />
+    </ChildContent>
+    <Actions>
+        <button class="btn btn--primary btn--danger" type="button" disabled="@(Saving || confirmText != ConfirmWord)" @onclick="OnConfirm">Удалить аккаунт</button>
+        <button class="btn btn--secondary" type="button" @onclick="OnClose">Отмена</button>
+    </Actions>
+</Modal>
+
+@code {
+    private const string ConfirmWord = "УДАЛИТЬ";
+
+    [Parameter] public bool Saving { get; set; }
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string confirmText = "";
+}

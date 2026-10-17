@@ -1,0 +1,25 @@
+<select id="@Id" class="@CssClass" value="@(Value?.ToString() ?? "")" @onchange="OnChangedAsync">
+    <option value="">@EmptyLabel</option>
+    @foreach (var category in Options)
+    {
+        <option value="@category.Id">@(category.Icon ?? "📁") @category.Name</option>
+    }
+</select>
+
+@code {
+    [Parameter] public long? Value { get; set; }
+    [Parameter] public EventCallback<long?> ValueChanged { get; set; }
+    [Parameter] public List<CategoryDto> Categories { get; set; } = [];
+    [Parameter] public string EmptyLabel { get; set; } = "Без категории";
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string CssClass { get; set; } = "form-control";
+
+    /// <summary>Filter lists show every category; forms hide archived ones (except the current value).</summary>
+    [Parameter] public bool IncludeArchived { get; set; }
+
+    private IEnumerable<CategoryDto> Options =>
+        IncludeArchived ? Categories : Categories.Selectable(Value);
+
+    private Task OnChangedAsync(ChangeEventArgs e) =>
+        ValueChanged.InvokeAsync(long.TryParse(e.Value?.ToString(), out var id) ? id : null);
+}

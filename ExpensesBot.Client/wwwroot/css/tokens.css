@@ -1,0 +1,95 @@
+/* Design tokens. Dark values are applied by the .dark class on .expenses-app. */
+:root {
+    /* Palette */
+    --color-bg: #f4f6fa;
+    --color-surface: #ffffff;
+    --color-surface-alt: #f8f9fc;
+    --color-text: #20252e;
+    --color-text-soft: #8790a0;
+    --color-text-muted: #a8b3cc;
+    --color-border: #e1e5ed;
+    --color-border-track: #e8ebf1;
+
+    --color-primary: #3659aa;
+    --color-primary-hover: #2e4d94;
+    --color-primary-soft: #eaf0ff;
+    --color-primary-text: #3659aa;
+    --color-primary-soft-hover: #d4e0f7;
+
+    --color-success: #34c759;
+    --color-warning: #ff9500;
+    --color-danger: #ff3b30;
+    --color-info: #3b82f6;
+
+    --color-income: #16a34a;
+    --color-income-soft: #f0fdf4;
+    --color-expense: #dc2626;
+    --color-expense-soft: #fef2f2;
+    --color-muted-soft: #f0f1f3;
+
+    --color-error-bg: #fff0f0;
+    --color-error-text: #a72d37;
+
+    /* Summary card (always dark) */
+    --color-summary-bg: #273b70;
+    --color-summary-text: #d2d9ed;
+    --color-summary-positive: #4ade80;
+    --color-summary-negative: #f87171;
+    --color-toggle-border: rgba(255, 255, 255, .3);
+    --color-toggle-hover: rgba(255, 255, 255, .1);
+    --color-toggle-active-bg: #ffffff;
+    --color-toggle-active-text: #273b70;
+
+    /* Typography */
+    --font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --fs-xs: 11px;
+    --fs-sm: 12px;
+    --fs-md: 13px;
+    --fs-lg: 14px;
+    --fs-xl: 18px;
+    --fs-2xl: 19px;
+    --fs-3xl: 28px;
+    --fs-4xl: 30px;
+
+    /* Radius */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 11px;
+    --radius-xl: 12px;
+    --radius-2xl: 14px;
+    --radius-3xl: 20px;
+
+    /* Misc */
+    --shadow-card: 0 5px 25px #20252e08;
+    --transition-fast: .2s;
+    --transition-normal: .3s;
+}
+
+.expenses-app.dark {
+    --color-bg: #1a1f2e;
+    --color-surface: #242b3d;
+    --color-surface-alt: #2a3347;
+    --color-text: #e0e5f0;
+    --color-text-soft: #8a95ab;
+    --color-border: #3a4560;
+    --color-border-track: #3a4560;
+
+    --color-primary-soft: #2a3347;
+    --color-primary-text: #9db6f0;
+    --color-primary-soft-hover: #3a4560;
+
+    --color-income: #4ade80;
+    --color-income-soft: #1a3d2a;
+    --color-expense: #f87171;
+    --color-expense-soft: #3d1f24;
+    --color-muted-soft: #2a3347;
+
+    --color-error-bg: #3d1f24;
+    --color-error-text: #f87171;
+
+    --color-summary-bg: #1e2a45;
+    --color-toggle-border: rgba(255, 255, 255, .2);
+    --color-toggle-hover: rgba(255, 255, 255, .08);
+    --color-toggle-active-bg: rgba(255, 255, 255, .15);
+    --color-toggle-active-text: #ffffff;
+}

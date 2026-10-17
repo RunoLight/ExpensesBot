@@ -1,0 +1,22 @@
+<div class="progress-track">
+    <div class="progress-fill progress-fill--@Color.ToString().ToLowerInvariant()" style="width: @Width"></div>
+</div>
+
+@code {
+    [Parameter] public double Value { get; set; }
+    [Parameter] public double Max { get; set; } = 100;
+    [Parameter] public ProgressColor Color { get; set; } = ProgressColor.Info;
+
+    // Invariant culture: "45.5%", never the invalid CSS "45,5%".
+    private string Width =>
+        Math.Clamp(Max > 0 ? Value / Max * 100 : 0, 0, 100)
+            .ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    public enum ProgressColor
+    {
+        Info,
+        Success,
+        Warning,
+        Danger
+    }
+}

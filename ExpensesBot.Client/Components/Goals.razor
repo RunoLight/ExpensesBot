@@ -1,0 +1,135 @@
+<section class="panel">
+    <PanelHeader Title="Цели" AddTitle="Новая цель" FormOpen="showForm" OnToggleForm="() => showForm = !showForm" />
+
+    @foreach (var goal in Items.Where(g => g.IsActive))
+    {
+        <ProgressCard @key="goal.Id"
+                      Title="@($"{goal.CategoryIcon ?? "🎯"} {goal.Name}")"
+                      Amount="@($"{Money.Format(goal.SavedAmountMinor)} / {Money.Format(goal.TargetAmountMinor)} {goal.Currency}")"
+                      Percent="goal.ProgressPercent"
+                      Color="ColorFor(goal.ProgressPercent)"
+                      OnDelete="() => ConfirmAndDeleteAsync(goal)">
+            <Footer>
+                @if (goal.TargetDateUtc.HasValue)
+                {
+                    <span>до @goal.TargetDateUtc.Value.ToString("dd.MM.yyyy")</span>
+                }
+            </Footer>
+            <ChildContent>
+                <div class="card__contribute">
+                    <input type="number"
+                           class="form-control"
+                           min="0"
+                           step="any"
+                           placeholder="Сумма, @goal.Currency"
+                           value="@DraftText(goal.Id)"
+                           @onchange="e => SetContribution(goal.Id, e.Value)" />
+                    <button type="button"
+                            class="btn btn--small"
+                            disabled="@(Saving || !contributions.ContainsKey(goal.Id))"
+                            @onclick="() => ConfirmAndContributeAsync(goal)">➕ Внести</button>
+                </div>
+            </ChildContent>
+        </ProgressCard>
+    }
+
+    @if (showForm)
+    {
+        <EditForm Model="form" OnValidSubmit="SubmitAsync">
+            <label for="goal-name">Название цели</label>
+            <InputText id="goal-name" class="form-control" @bind-Value="form.Name" placeholder="Например, новый телефон" />
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="goal-target">Целевая сумма</label>
+                    <InputNumber id="goal-target" class="form-control" @bind-Value="form.TargetAmount" />
+                </div>
+                <div class="form-group">
+                    <label for="goal-currency">Валюта</label>
+                    <CurrencySelect Id="goal-currency" @bind-Value="form.Currency" />
+                </div>
+            </div>
+
+            <label for="goal-category">Категория</label>
+            <CategorySelect Id="goal-category" Categories="Categories" EmptyLabel="Новая категория для цели" @bind-Value="form.CategoryId" />
+
+            <label for="goal-date">Дата цели (необязательно)</label>
+            <InputDate id="goal-date" class="form-control" @bind-Value="form.TargetDate" />
+
+            <button class="btn btn--primary" type="submit" disabled="@Saving">Создать цель</button>
+        </EditForm>
+    }
+</section>
+
+@code {
+    [Parameter] public List<GoalDto> Items { get; set; } = [];
+    [Parameter] public List<CategoryDto> Categories { get; set; } = [];
+    [Parameter] public bool Saving { get; set; }
+
+    /// <summary>Saves the goal and returns true on success, so the form can reset.</summary>
+    [Parameter] public Func<GoalForm, Task<bool>> OnCreate { get; set; } = _ => Task.FromResult(false);
+    [Parameter] public EventCallback<GoalContribution> OnContribute { get; set; }
+    [Parameter] public EventCallback<long> OnDelete { get; set; }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private bool showForm;
+    private GoalForm form = new();
+    private readonly Dictionary<long, double> contributions = [];
+
+    private async Task SubmitAsync()
+    {
+        if (await OnCreate(form))
+        {
+            form = new GoalForm { Currency = form.Currency };
+            showForm = false;
+        }
+    }
+
+    private void SetContribution(long goalId, object? value)
+    {
+        if (double.TryParse(value?.ToString(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var amount) && amount > 0)
+        {
+            contributions[goalId] = amount;
+        }
+        else
+        {
+            contributions.Remove(goalId);
+        }
+    }
+
+    private string DraftText(long goalId) =>
+        contributions.TryGetValue(goalId, out var amount)
+            ? amount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : "";
+
+    private async Task ConfirmAndContributeAsync(GoalDto goal)
+    {
+        if (!contributions.TryGetValue(goal.Id, out var amount))
+            return;
+
+        var amountMinor = Money.ToMinor(amount);
+        var message = $"Внести {Money.Format(amountMinor)} {goal.Currency} в цель «{goal.Name}»? " +
+                      "Взнос будет записан как доход в категории цели.";
+
+        if (!await JS.ConfirmAsync(message))
+            return;
+
+        await OnContribute.InvokeAsync(new GoalContribution(goal.Id, amountMinor));
+        contributions.Remove(goal.Id);
+    }
+
+    private async Task ConfirmAndDeleteAsync(GoalDto goal)
+    {
+        if (await JS.ConfirmAsync($"Удалить цель «{goal.Name}»? Уже внесённые взносы останутся в истории."))
+            await OnDelete.InvokeAsync(goal.Id);
+    }
+
+    private static ProgressBar.ProgressColor ColorFor(double percent) => percent switch
+    {
+        >= 90 => ProgressBar.ProgressColor.Success,
+        >= 50 => ProgressBar.ProgressColor.Warning,
+        _ => ProgressBar.ProgressColor.Info
+    };
+}

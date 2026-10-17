@@ -1,0 +1,28 @@
+<div class="modal-overlay" @onclick="OnClose">
+    <div class="modal-card @(Wide ? "modal-card--wide" : "")" role="dialog" aria-modal="true" @onclick:stopPropagation>
+        <div class="modal-card__header">
+            <h3>@Title</h3>
+            <button type="button" class="btn-icon-textless" title="Закрыть" @onclick="OnClose">✕</button>
+        </div>
+
+        @ChildContent
+
+        @if (Actions is not null)
+        {
+            <div class="modal-card__actions">
+                @Actions
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public bool Wide { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Buttons shown under the content. Forms that need a submit button render their own.</summary>
+    [Parameter] public RenderFragment? Actions { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+}

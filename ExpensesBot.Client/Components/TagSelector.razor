@@ -1,0 +1,66 @@
+<div>
+    <div class="tag-selector__header">
+        <span class="field-label">Теги</span>
+        <button type="button" class="btn-icon btn-icon--sm" title="@(showForm ? "Закрыть" : "Новый тег")" @onclick="() => showForm = !showForm">
+            @(showForm ? "✕" : "+")
+        </button>
+    </div>
+
+    @if (showForm)
+    {
+        <div class="tag-selector__form">
+            <div class="form-row form-row--inline">
+                <div class="form-group">
+                    <label for="tag-name">Название</label>
+                    <input id="tag-name" class="form-control" placeholder="Например, отпуск" @bind="newTag.Name" />
+                </div>
+                <button type="button" class="color-swatch" title="Сменить цвет" @onclick="() => newTag.Color = TagColors.Next(newTag.Color)">
+                    <span style="background-color: @newTag.Color"></span>
+                </button>
+            </div>
+            <button class="btn btn--primary" type="button" disabled="@Saving" @onclick="AddAsync">Добавить тег</button>
+        </div>
+    }
+
+    @if (Tags.Count > 0)
+    {
+        <div class="tag-list">
+            @foreach (var tag in Tags)
+            {
+                <TagChip @key="tag.Id"
+                         Tag="tag"
+                         Selected="SelectedTagIds.Contains(tag.Id)"
+                         OnToggle="() => OnToggleTag.InvokeAsync(tag.Id)"
+                         OnDelete="() => OnDeleteTag.InvokeAsync(tag.Id)" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<TagDto> Tags { get; set; } = [];
+    [Parameter] public HashSet<long> SelectedTagIds { get; set; } = [];
+    [Parameter] public bool Saving { get; set; }
+
+    [Parameter] public EventCallback<long> OnToggleTag { get; set; }
+
+    /// <summary>Receives the new tag; the parent validates and saves it.</summary>
+    [Parameter] public EventCallback<NewTagForm> OnAddTag { get; set; }
+    [Parameter] public EventCallback<long> OnDeleteTag { get; set; }
+
+    private bool showForm;
+    private NewTagForm newTag = new();
+
+    private async Task AddAsync()
+    {
+        var countBefore = Tags.Count;
+        await OnAddTag.InvokeAsync(newTag);
+
+        // Close the form only when the tag was actually created.
+        if (Tags.Count > countBefore)
+        {
+            newTag = new NewTagForm();
+            showForm = false;
+        }
+    }
+}

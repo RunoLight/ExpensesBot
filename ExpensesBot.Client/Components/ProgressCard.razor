@@ -1,0 +1,26 @@
+<article class="card">
+    <div class="card__header">
+        <span class="card__title">@Title</span>
+        <span class="card__amount">@Amount</span>
+        @if (OnDelete.HasDelegate)
+        {
+            <button type="button" class="btn-icon-textless btn-icon-textless--danger" title="Удалить" @onclick="OnDelete">✕</button>
+        }
+    </div>
+    <ProgressBar Value="@Percent" Color="@Color" />
+    <div class="card__footer">
+        <span class="card__percent">@Percent.ToString("F0")%</span>
+        @Footer
+    </div>
+    @ChildContent
+</article>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Amount { get; set; } = "";
+    [Parameter] public double Percent { get; set; }
+    [Parameter] public ProgressBar.ProgressColor Color { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+}

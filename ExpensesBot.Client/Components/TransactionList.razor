@@ -1,0 +1,146 @@
+<SearchFilterBar SearchText="@searchText"
+                 CategoryId="categoryId"
+                 SortOrder="@sortOrder"
+                 Categories="Categories"
+                 Disabled="Saving"
+                 OnSearchChanged="text => searchText = text"
+                 OnCategoryChanged="id => categoryId = id"
+                 OnSortChanged="order => sortOrder = order"
+                 OnExport="OnExport" />
+
+<section class="history">
+    <div class="history__heading">
+        <h2>История</h2>
+        <button type="button" class="btn-icon-textless btn-icon-textless--primary" disabled="@Saving" @onclick="OnRefresh">Обновить</button>
+    </div>
+
+    @{
+        var visible = FilterAndSort();
+    }
+
+    @if (Transactions.Count == 0)
+    {
+        <EmptyState Icon="🧾" Title="Пока пусто">
+            <p>Добавьте первую операцию в форме выше или отправьте сумму боту.</p>
+        </EmptyState>
+    }
+    else if (visible.Count == 0)
+    {
+        <EmptyState Icon="🔍" Title="Ничего не найдено">
+            <p>Попробуйте изменить параметры поиска.</p>
+        </EmptyState>
+    }
+    else
+    {
+        @foreach (var transaction in visible)
+        {
+            var name = transaction.CategoryName ?? "Без категории";
+            var occurredAt = transaction.OccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+            <article class="transaction-row" @key="transaction.Id">
+                <div class="transaction-row__icon">@Categories.IconFor(transaction.CategoryId)</div>
+                <div class="transaction-row__info">
+                    <strong>@name</strong>
+                    <div class="transaction-row__note">
+                        @if (!string.IsNullOrWhiteSpace(transaction.Note))
+                        {
+                            <span>@transaction.Note · </span>
+                        }
+                        <span class="transaction-row__date">@occurredAt</span>
+                    </div>
+                </div>
+                <div class="transaction-row__side">
+                    @if (TagsOf(transaction) is { Count: > 0 } transactionTags)
+                    {
+                        <div class="tag-list tag-list--compact">
+                            @foreach (var tag in transactionTags)
+                            {
+                                <TagChip Tag="tag" />
+                            }
+                        </div>
+                    }
+                    <div class="transaction-row__amount-row">
+                        <strong class="transaction-row__amount @(transaction.Type == TransactionType.Income ? "transaction-row__amount--income" : null)">
+                            @Money.FormatSigned(transaction.AmountMinor, transaction.Currency, transaction.Type)
+                        </strong>
+                        @if (Convert(transaction) is { } converted)
+                        {
+                            <span class="transaction-row__converted">~@Money.Format(converted) @SelectedCurrency</span>
+                        }
+                        <button type="button" class="btn-icon-textless" title="Редактировать" @onclick="() => OnEdit.InvokeAsync(transaction)">✏️</button>
+                        <button type="button" class="btn-icon-textless btn-icon-textless--danger" title="Удалить" @onclick="() => ConfirmAndDeleteAsync(transaction.Id, name)">✕</button>
+                    </div>
+                </div>
+            </article>
+        }
+    }
+</section>
+
+@code {
+    [Parameter] public List<TransactionDto> Transactions { get; set; } = [];
+    [Parameter] public List<CategoryDto> Categories { get; set; } = [];
+    [Parameter] public List<TagDto> Tags { get; set; } = [];
+    [Parameter] public IReadOnlyList<ExchangeRateDto> Rates { get; set; } = [];
+    [Parameter] public string SelectedCurrency { get; set; } = "AMD";
+    [Parameter] public bool Saving { get; set; }
+
+    [Parameter] public EventCallback OnRefresh { get; set; }
+    [Parameter] public EventCallback OnExport { get; set; }
+    [Parameter] public EventCallback<TransactionDto> OnEdit { get; set; }
+    [Parameter] public EventCallback<long> OnDelete { get; set; }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private string searchText = "";
+    private long? categoryId;
+    private string sortOrder = SearchFilterBar.DefaultSort;
+
+    private List<TransactionDto> FilterAndSort()
+    {
+        IEnumerable<TransactionDto> query = Transactions;
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            query = query.Where(t =>
+                (t.Note?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (t.CategoryName?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        if (categoryId.HasValue)
+            query = query.Where(t => t.CategoryId == categoryId.Value);
+
+        query = sortOrder switch
+        {
+            "date-asc" => query.OrderBy(t => t.OccurredAtUtc).ThenBy(t => t.Id),
+            "amount-desc" => query.OrderByDescending(t => t.AmountMinor).ThenByDescending(t => t.Id),
+            "amount-asc" => query.OrderBy(t => t.AmountMinor).ThenBy(t => t.Id),
+            "name-asc" => query.OrderBy(t => t.CategoryName ?? "").ThenBy(t => t.Id),
+            "name-desc" => query.OrderByDescending(t => t.CategoryName ?? "").ThenByDescending(t => t.Id),
+            _ => query.OrderByDescending(t => t.OccurredAtUtc).ThenByDescending(t => t.Id)
+        };
+
+        return query.ToList();
+    }
+
+    private List<TagDto> TagsOf(TransactionDto transaction) =>
+        transaction.TransactionTags is { Count: > 0 } links
+            ? Tags.Where(tag => links.Any(link => link.TagId == tag.Id)).ToList()
+            : [];
+
+    /// <summary>Approximate amount in the display currency, using the rates served by the API.</summary>
+    private long? Convert(TransactionDto transaction)
+    {
+        if (transaction.Currency == SelectedCurrency)
+            return null;
+
+        var rate = Rates.FirstOrDefault(r => r.FromCurrency == transaction.Currency && r.ToCurrency == SelectedCurrency);
+        return rate is null
+            ? null
+            : (long)Math.Round(transaction.AmountMinor * rate.Rate, MidpointRounding.AwayFromZero);
+    }
+
+    private async Task ConfirmAndDeleteAsync(long id, string name)
+    {
+        if (await JS.ConfirmAsync($"Удалить операцию «{name}»? Это действие нельзя отменить."))
+            await OnDelete.InvokeAsync(id);
+    }
+}

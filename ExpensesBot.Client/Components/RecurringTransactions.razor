@@ -1,0 +1,103 @@
+<section class="panel">
+    <PanelHeader Title="Повторяющиеся" AddTitle="Новая повторяющаяся операция" FormOpen="showForm" OnToggleForm="() => showForm = !showForm" />
+
+    @if (showForm)
+    {
+        <EditForm Model="form" OnValidSubmit="SubmitAsync">
+            <TypeToggle @bind-Value="form.Type" />
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="rec-amount">Сумма</label>
+                    <InputNumber id="rec-amount" class="form-control" @bind-Value="form.Amount" />
+                </div>
+                <div class="form-group">
+                    <label for="rec-currency">Валюта</label>
+                    <CurrencySelect Id="rec-currency" @bind-Value="form.Currency" />
+                </div>
+            </div>
+
+            <label for="rec-category">Категория</label>
+            <CategorySelect Id="rec-category" Categories="Categories" @bind-Value="form.CategoryId" />
+
+            <label for="rec-note">Комментарий</label>
+            <InputText id="rec-note" class="form-control" @bind-Value="form.Note" placeholder="Например, аренда или зарплата" />
+
+            <label for="rec-pattern">Периодичность</label>
+            <InputSelect id="rec-pattern" class="form-control" @bind-Value="form.Pattern">
+                @foreach (var (value, label) in Patterns)
+                {
+                    <option value="@value">@label</option>
+                }
+            </InputSelect>
+
+            <button class="btn btn--primary" type="submit" disabled="@Saving">Добавить</button>
+        </EditForm>
+    }
+
+    @foreach (var rule in Items.Where(r => r.IsActive))
+    {
+        var name = DisplayName(rule);
+        <article class="list-row" @key="rule.Id">
+            <span class="list-row__icon">@Categories.IconFor(rule.CategoryId)</span>
+            <div class="list-row__body">
+                <strong>@name</strong>
+                <span class="list-row__meta">@Money.FormatSigned(rule.AmountMinor, rule.Currency, rule.Type)</span>
+            </div>
+            <span class="badge">@PatternLabel(rule.Pattern)</span>
+            <button type="button" class="btn-icon-textless btn-icon-textless--primary" title="Выполнить сейчас" @onclick="() => ConfirmAndExecuteAsync(rule.Id, name)">▶</button>
+            <button type="button" class="btn-icon-textless btn-icon-textless--danger" title="Удалить" @onclick="() => ConfirmAndDeleteAsync(rule.Id, name)">✕</button>
+        </article>
+    }
+</section>
+
+@code {
+    private static readonly (string Value, string Label)[] Patterns =
+    [
+        ("Daily", "Ежедневно"),
+        ("Weekly", "Еженедельно"),
+        ("Monthly", "Ежемесячно"),
+        ("Yearly", "Ежегодно")
+    ];
+
+    [Parameter] public List<RecurringTransactionDto> Items { get; set; } = [];
+    [Parameter] public List<CategoryDto> Categories { get; set; } = [];
+    [Parameter] public bool Saving { get; set; }
+
+    /// <summary>Saves the rule and returns true on success, so the form can reset.</summary>
+    [Parameter] public Func<RecurringTransactionForm, Task<bool>> OnCreate { get; set; } = _ => Task.FromResult(false);
+    [Parameter] public EventCallback<long> OnExecute { get; set; }
+    [Parameter] public EventCallback<long> OnDelete { get; set; }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private bool showForm;
+    private RecurringTransactionForm form = new();
+
+    private async Task SubmitAsync()
+    {
+        if (await OnCreate(form))
+        {
+            form = new RecurringTransactionForm { Currency = form.Currency };
+            showForm = false;
+        }
+    }
+
+    private async Task ConfirmAndExecuteAsync(long id, string name)
+    {
+        if (await JS.ConfirmAsync($"Записать «{name}» сейчас? Следующий автоматический платёж будет отсчитываться от сегодняшнего дня."))
+            await OnExecute.InvokeAsync(id);
+    }
+
+    private async Task ConfirmAndDeleteAsync(long id, string name)
+    {
+        if (await JS.ConfirmAsync($"Удалить повторяющуюся операцию «{name}»? Уже созданные операции останутся."))
+            await OnDelete.InvokeAsync(id);
+    }
+
+    private static string DisplayName(RecurringTransactionDto rule) =>
+        !string.IsNullOrWhiteSpace(rule.Note) ? rule.Note : rule.CategoryName ?? "Без категории";
+
+    private static string PatternLabel(string pattern) =>
+        Patterns.FirstOrDefault(p => p.Value == pattern).Label ?? pattern;
+}

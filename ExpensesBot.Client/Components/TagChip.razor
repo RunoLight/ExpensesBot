@@ -1,0 +1,39 @@
+@if (OnToggle.HasDelegate)
+{
+    <span class="tag-chip @(Selected ? "tag-chip--selected" : null)"
+          role="button"
+          tabindex="0"
+          style="--tag-color: @Tag.Color"
+          @onclick="OnToggle">
+        @Tag.Name
+        @if (OnDelete.HasDelegate)
+        {
+            <button type="button"
+                    class="btn-icon-textless btn-icon-textless--sm"
+                    title="Удалить тег"
+                    @onclick="ConfirmAndDeleteAsync"
+                    @onclick:stopPropagation>✕</button>
+        }
+    </span>
+}
+else
+{
+    <span class="tag-label" style="--tag-color: @Tag.Color">@Tag.Name</span>
+}
+
+@code {
+    [Parameter, EditorRequired] public TagDto Tag { get; set; } = default!;
+    [Parameter] public bool Selected { get; set; }
+
+    /// <summary>Set to make the chip selectable; without it the chip is a read-only label.</summary>
+    [Parameter] public EventCallback OnToggle { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private async Task ConfirmAndDeleteAsync()
+    {
+        if (await JS.ConfirmAsync($"Удалить тег «{Tag.Name}»? Это действие нельзя отменить."))
+            await OnDelete.InvokeAsync();
+    }
+}

@@ -1,0 +1,46 @@
+<section class="panel filter-bar">
+    <div class="filter-bar__search">
+        <span class="filter-bar__icon">🔍</span>
+        <input class="form-control"
+               value="@SearchText"
+               @oninput="e => OnSearchChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty)"
+               placeholder="Поиск по заметке или категории..." />
+    </div>
+    <CategorySelect Categories="Categories"
+                    IncludeArchived="true"
+                    EmptyLabel="Все категории"
+                    Value="CategoryId"
+                    ValueChanged="OnCategoryChanged" />
+    <select class="form-control" value="@SortOrder" @onchange="e => OnSortChanged.InvokeAsync(e.Value?.ToString() ?? DefaultSort)">
+        @foreach (var (value, label) in SortOptions)
+        {
+            <option value="@value">@label</option>
+        }
+    </select>
+    <button type="button" class="btn btn--secondary" disabled="@Disabled" @onclick="OnExport">📤 Экспорт CSV</button>
+</section>
+
+@code {
+    public const string DefaultSort = "date-desc";
+
+    private static readonly (string Value, string Label)[] SortOptions =
+    [
+        (DefaultSort, "Сначала новые"),
+        ("date-asc", "Сначала старые"),
+        ("amount-desc", "По сумме ↓"),
+        ("amount-asc", "По сумме ↑"),
+        ("name-asc", "По категории А-Я"),
+        ("name-desc", "По категории Я-А")
+    ];
+
+    [Parameter] public string SearchText { get; set; } = "";
+    [Parameter] public long? CategoryId { get; set; }
+    [Parameter] public string SortOrder { get; set; } = DefaultSort;
+    [Parameter] public List<CategoryDto> Categories { get; set; } = [];
+    [Parameter] public bool Disabled { get; set; }
+
+    [Parameter] public EventCallback<string> OnSearchChanged { get; set; }
+    [Parameter] public EventCallback<long?> OnCategoryChanged { get; set; }
+    [Parameter] public EventCallback<string> OnSortChanged { get; set; }
+    [Parameter] public EventCallback OnExport { get; set; }
+}

@@ -1,0 +1,254 @@
+@using System.Globalization
+@using System.Text
+
+<Modal Title="📥 Импорт CSV" Wide="true" OnClose="CloseAsync">
+    <ChildContent>
+        @switch (status)
+        {
+            case ImportStatus.Idle:
+                <p>Загрузите CSV-файл в том же формате, что и при экспорте:</p>
+                <pre class="code-block">@SampleCsv</pre>
+                <ul class="rules-list">
+                    <li><strong>Дата</strong> — <code>yyyy-MM-dd HH:mm</code> (UTC) или <code>dd.MM.yyyy</code></li>
+                    <li><strong>Тип</strong> — «Расход» или «Доход»</li>
+                    <li><strong>Категория</strong> — название существующей категории; неизвестные импортируются без категории</li>
+                    <li><strong>Сумма</strong> — число с точкой, например 1500.50</li>
+                    <li><strong>Валюта</strong> — @string.Join(", ", Money.Currencies)</li>
+                    <li><strong>Комментарий</strong> — необязательно</li>
+                </ul>
+                <input @ref="fileInput" class="file-input" type="file" accept=".csv,text/csv" @onchange="() => hasFile = true" />
+                break;
+
+            case ImportStatus.Importing:
+                <p>Импорт...</p>
+                <ProgressBar Value="processedCount" Max="Math.Max(totalCount, 1)" />
+                <p class="muted">@processedCount из @totalCount строк</p>
+                break;
+
+            case ImportStatus.Completed:
+                <div class="result-box result-box--success">
+                    <p>✅ Добавлено операций: <strong>@createdCount</strong></p>
+                    @if (errorCount > 0)
+                    {
+                        <p>Пропущено строк с ошибками: <strong>@errorCount</strong></p>
+                    }
+                </div>
+                break;
+
+            case ImportStatus.Failed:
+                <div class="result-box result-box--error">
+                    <p>❌ @errorMessage</p>
+                </div>
+                break;
+        }
+    </ChildContent>
+    <Actions>
+        @if (status == ImportStatus.Idle)
+        {
+            <button type="button" class="btn btn--primary" disabled="@(!hasFile)" @onclick="ConfirmAndImportAsync">Загрузить</button>
+        }
+        <button type="button" class="btn btn--secondary" disabled="@(status == ImportStatus.Importing)" @onclick="CloseAsync">
+            @(status == ImportStatus.Completed ? "Готово" : "Закрыть")
+        </button>
+    </Actions>
+</Modal>
+
+@code {
+    private const int BatchSize = 50;
+
+    private const string SampleCsv =
+        "Дата,Тип,Категория,Сумма,Валюта,Комментарий\n" +
+        "2026-01-15 14:30,Расход,Продукты,1500.50,AMD,Овощи\n" +
+        "2026-01-16 09:00,Доход,Зарплата,500000.00,AMD,Январь";
+
+    private static readonly string[] DateFormats =
+        ["yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd", "dd.MM.yyyy HH:mm", "dd.MM.yyyy"];
+
+    [Parameter] public List<CategoryDto> Categories { get; set; } = [];
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Raised once when the modal closes after at least one row was imported.</summary>
+    [Parameter] public EventCallback OnImported { get; set; }
+
+    [Inject] private ExpensesApiClient Api { get; set; } = null!;
+    [Inject] private IJSRuntime JS { get; set; } = null!;
+
+    private enum ImportStatus { Idle, Importing, Completed, Failed }
+
+    private ElementReference fileInput;
+    private bool hasFile;
+    private ImportStatus status = ImportStatus.Idle;
+    private int processedCount;
+    private int totalCount;
+    private int createdCount;
+    private int errorCount;
+    private string? errorMessage;
+
+    private async Task ConfirmAndImportAsync()
+    {
+        if (await JS.ConfirmAsync("Импорт создаст сразу много операций. Продолжить?"))
+            await ImportAsync();
+    }
+
+    private async Task ImportAsync()
+    {
+        string? content;
+        try
+        {
+            content = await JS.InvokeAsync<string?>("expensesUtils.readFileContent", fileInput);
+        }
+        catch (JSException ex)
+        {
+            Fail($"Не удалось прочитать файл: {ex.Message}");
+            return;
+        }
+
+        var lines = (content ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Skip(1).ToList();
+        if (lines.Count == 0)
+        {
+            Fail("В файле нет строк с операциями.");
+            return;
+        }
+
+        status = ImportStatus.Importing;
+        totalCount = lines.Count;
+        processedCount = createdCount = errorCount = 0;
+
+        var categoryIds = Categories
+            .GroupBy(c => c.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+
+        var batch = new List<BulkTransactionRequest>(BatchSize);
+        foreach (var line in lines)
+        {
+            if (TryParseRow(ParseCsvLine(line), categoryIds) is { } request)
+                batch.Add(request);
+            else
+                errorCount++;
+
+            processedCount++;
+
+            if (batch.Count == BatchSize)
+                await SendBatchAsync(batch);
+        }
+
+        if (batch.Count > 0)
+            await SendBatchAsync(batch);
+
+        if (createdCount > 0)
+            status = ImportStatus.Completed;
+        else
+            Fail("Не удалось импортировать ни одной операции. Проверьте формат файла.");
+    }
+
+    private async Task SendBatchAsync(List<BulkTransactionRequest> batch)
+    {
+        try
+        {
+            var result = await Api.BulkCreateTransactionsAsync(batch);
+            createdCount += result.Created.Count;
+            errorCount += result.Errors.Count;
+        }
+        catch (Exception)
+        {
+            // A failed batch is reported as skipped rows; the rest of the file still imports.
+            errorCount += batch.Count;
+        }
+
+        batch.Clear();
+        StateHasChanged();
+    }
+
+    private async Task CloseAsync()
+    {
+        if (createdCount > 0)
+            await OnImported.InvokeAsync();
+
+        await OnClose.InvokeAsync();
+    }
+
+    private void Fail(string message)
+    {
+        errorMessage = message;
+        status = ImportStatus.Failed;
+    }
+
+    /// <summary>Columns, as written by the export: date (UTC), type, category, amount, currency, note.</summary>
+    private static BulkTransactionRequest? TryParseRow(List<string> fields, Dictionary<string, long> categoryIds)
+    {
+        if (fields.Count < 5)
+            return null;
+
+        if (!DateTime.TryParseExact(fields[0], DateFormats, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var occurredAtUtc))
+            return null;
+
+        var type = fields[1].ToLowerInvariant() switch
+        {
+            "доход" or "income" => TransactionType.Income,
+            "расход" or "expense" => TransactionType.Expense,
+            _ => (TransactionType?)null
+        };
+
+        if (type is null ||
+            !decimal.TryParse(fields[3], NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) ||
+            amount <= 0)
+            return null;
+
+        var currency = fields[4].ToUpperInvariant();
+        if (!Money.Currencies.Contains(currency))
+            return null;
+
+        long? categoryId = categoryIds.TryGetValue(Unprotect(fields[2]), out var id) ? id : null;
+        var note = fields.Count > 5 && fields[5].Length > 0 ? Unprotect(fields[5]) : null;
+
+        return new BulkTransactionRequest(
+            decimal.ToInt64(decimal.Round(amount * 100m, 0, MidpointRounding.AwayFromZero)),
+            currency,
+            categoryId,
+            DateTime.SpecifyKind(occurredAtUtc, DateTimeKind.Utc),
+            note,
+            type.Value);
+    }
+
+    /// <summary>Reverses the export's formula-injection guard: "'=x" → "=x".</summary>
+    private static string Unprotect(string value) =>
+        value.Length > 1 && value[0] == '\'' && value[1] is '=' or '+' or '-' or '@' ? value[1..] : value;
+
+    /// <summary>Splits one CSV line, honouring quotes and "" escapes.</summary>
+    private static List<string> ParseCsvLine(string line)
+    {
+        var fields = new List<string>();
+        var current = new StringBuilder();
+        var inQuotes = false;
+
+        for (var i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (c == '"')
+            {
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                {
+                    current.Append('"');
+                    i++;
+                }
+                else
+                {
+                    inQuotes = !inQuotes;
+                }
+            }
+            else if (c == ',' && !inQuotes)
+            {
+                fields.Add(current.ToString().Trim());
+                current.Clear();
+            }
+            else
+            {
+                current.Append(c);
+            }
+        }
+
+        fields.Add(current.ToString().Trim());
+        return fields;
+    }
+}

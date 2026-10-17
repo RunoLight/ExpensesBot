@@ -1,7 +1,596 @@
-﻿@page "/"
+@page "/"
+@using System.Globalization
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Мои финансы</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="expenses-app @(darkTheme ? "dark" : null)">
+    <div class="app-shell">
+        <AppHeader Currency="@currency"
+                   DarkTheme="darkTheme"
+                   OnCurrencyChanged="ChangeCurrencyAsync"
+                   OnHelp="() => dialog = Dialog.Help"
+                   OnToggleTheme="ToggleThemeAsync"
+                   OnImport="() => dialog = Dialog.Import"
+                   OnDeleteAccount="() => dialog = Dialog.DeleteAccount" />
 
-Welcome to your new app.
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <ErrorBanner Message="@error" OnDismiss="() => error = null" />
+        }
+
+        @if (loading)
+        {
+            <p class="muted">Загружаем данные...</p>
+        }
+        else
+        {
+            <SummaryCard Summary="summary" SummaryMode="@summaryMode" Loading="summaryLoading" OnModeChanged="ChangeSummaryModeAsync" />
+
+            <CategoryBreakdown CategoryRows="summary.ByCategory" PeriodRows="summary.ByPeriod" Categories="categories" />
+
+            <CategoryManager Categories="categories"
+                             Saving="saving"
+                             OnCreate="AddCategoryAsync"
+                             OnArchive="ArchiveCategoryAsync"
+                             OnDelete="DeleteCategoryAsync" />
+
+            <RecurringTransactions Items="recurringTransactions"
+                                   Categories="categories"
+                                   Saving="saving"
+                                   OnCreate="AddRecurringAsync"
+                                   OnExecute="ExecuteRecurringAsync"
+                                   OnDelete="DeleteRecurringAsync" />
+
+            <Goals Items="goals"
+                   Categories="categories"
+                   Saving="saving"
+                   OnCreate="AddGoalAsync"
+                   OnContribute="ContributeToGoalAsync"
+                   OnDelete="DeleteGoalAsync" />
+
+            <Budgets Items="budgets"
+                     Categories="categories"
+                     Saving="saving"
+                     OnCreate="AddBudgetAsync"
+                     OnDelete="DeleteBudgetAsync" />
+
+            <TransactionForm Form="form"
+                             Categories="categories"
+                             Tags="tags"
+                             SelectedTagIds="selectedTagIds"
+                             Saving="saving"
+                             OnSubmit="AddTransactionAsync"
+                             OnToggleTag="ToggleTagSelection"
+                             OnAddTag="AddTagAsync"
+                             OnDeleteTag="DeleteTagAsync" />
+
+            <TransactionList Transactions="transactions"
+                             Categories="categories"
+                             Tags="tags"
+                             Rates="rates"
+                             SelectedCurrency="@currency"
+                             Saving="saving"
+                             OnRefresh="RefreshAsync"
+                             OnExport="ExportCsvAsync"
+                             OnEdit="OpenEdit"
+                             OnDelete="DeleteTransactionAsync" />
+        }
+    </div>
+
+    @switch (dialog)
+    {
+        case Dialog.Help:
+            <HelpModal OnClose="CloseDialog" />
+            break;
+
+        case Dialog.Import:
+            <ImportModal Categories="categories" OnClose="CloseDialog" OnImported="LoadAsync" />
+            break;
+
+        case Dialog.DeleteAccount:
+            <DeleteAccountModal Saving="saving" OnConfirm="DeleteAccountAsync" OnClose="CloseDialog" />
+            break;
+
+        case Dialog.Edit when editing is not null:
+            <EditModal Form="editForm"
+                       Categories="categories"
+                       Saving="saving"
+                       OnSave="SaveEditAsync"
+                       OnClose="CloseDialog" />
+            break;
+    }
+</div>
+
+@code {
+    private const string ThemeStorageKey = "expensesTheme";
+
+    private enum Dialog { None, Help, Import, DeleteAccount, Edit }
+
+    [Inject] private ExpensesApiClient Api { get; set; } = null!;
+    [Inject] private TelegramService Telegram { get; set; } = null!;
+    [Inject] private IJSRuntime JS { get; set; } = null!;
+
+    // Data
+    private List<CategoryDto> categories = [];
+    private List<TransactionDto> transactions = [];
+    private List<RecurringTransactionDto> recurringTransactions = [];
+    private List<BudgetDto> budgets = [];
+    private List<GoalDto> goals = [];
+    private List<TagDto> tags = [];
+    private List<ExchangeRateDto> rates = [];
+    private UserSummaryDto summary = UserSummaryDto.Empty("AMD");
+
+    // View state
+    private bool loading = true;
+    private bool saving;
+    private string? error;
+    private string currency = "AMD";
+    private string summaryMode = "month";
+    private bool summaryLoading;
+    private int summaryRequest;
+    private bool darkTheme;
+    private Dialog dialog;
+
+    // New transaction form and the transaction being edited
+    private TransactionFormModel form = new();
+    private readonly HashSet<long> selectedTagIds = [];
+    private TransactionFormModel editForm = new();
+    private TransactionDto? editing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await TryJsAsync(async () => await Telegram.ReadyAsync());
+        await LoadThemeAsync();
+        await ApplyStartParameterAsync();
+
+        try
+        {
+            currency = (await Api.GetProfileAsync()).DefaultCurrency;
+            form.Currency = currency;
+        }
+        catch (Exception ex)
+        {
+            error = $"Не удалось загрузить профиль: {ex.Message}";
+        }
+
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Reloads all data. Only the first load shows the placeholder: later reloads keep
+    /// the panels mounted, so open forms and history filters survive a refresh.
+    /// </summary>
+    private async Task LoadAsync()
+    {
+        error = null;
+
+        try
+        {
+            // Requests are independent, so run them in parallel.
+            var categoriesTask = Api.GetCategoriesAsync();
+            var transactionsTask = Api.GetTransactionsAsync();
+            var summaryVersion = ++summaryRequest;
+            var summaryTask = Api.GetSummaryAsync(summaryMode, currency);
+            var recurringTask = Api.GetRecurringTransactionsAsync();
+            var budgetsTask = Api.GetBudgetsAsync();
+            var goalsTask = Api.GetGoalsAsync();
+            var tagsTask = Api.GetTagsAsync();
+            var ratesTask = Api.GetExchangeRatesAsync();
+
+            await Task.WhenAll(categoriesTask, transactionsTask, summaryTask, recurringTask,
+                budgetsTask, goalsTask, tagsTask, ratesTask);
+
+            categories = categoriesTask.Result;
+            transactions = transactionsTask.Result;
+            if (summaryVersion == summaryRequest)
+                summary = summaryTask.Result;
+            recurringTransactions = recurringTask.Result;
+            budgets = budgetsTask.Result;
+            goals = goalsTask.Result;
+            tags = tagsTask.Result;
+            rates = ratesTask.Result;
+        }
+        catch (Exception ex)
+        {
+            error = $"Не удалось загрузить данные: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private Task RefreshAsync() => RunAsync(LoadAsync, "Не удалось обновить");
+
+    /// <summary>
+    /// Reloads only the summary. Responses for a period the user has already
+    /// switched away from are dropped, so quick taps never show stale totals.
+    /// </summary>
+    private async Task ReloadSummaryAsync()
+    {
+        var request = ++summaryRequest;
+        summaryLoading = true;
+
+        try
+        {
+            var result = await Api.GetSummaryAsync(summaryMode, currency);
+            if (request == summaryRequest)
+                summary = result;
+        }
+        catch (Exception ex)
+        {
+            if (request == summaryRequest)
+                error = $"Не удалось обновить сводку: {ex.Message}";
+        }
+        finally
+        {
+            if (request == summaryRequest)
+                summaryLoading = false;
+        }
+    }
+
+    private Task ChangeSummaryModeAsync(string mode)
+    {
+        if (mode == summaryMode)
+            return Task.CompletedTask;
+
+        summaryMode = mode;
+        return ReloadSummaryAsync();
+    }
+
+    /// <summary>The header currency is the profile's default: the bot records and reports in it.</summary>
+    private Task ChangeCurrencyAsync(string value) =>
+        RunAsync(async () =>
+        {
+            await Api.SetDefaultCurrencyAsync(value);
+            currency = value;
+            form.Currency = value;
+            await ReloadSummaryAsync();
+        }, "Не удалось сменить валюту");
+
+    private void CloseDialog()
+    {
+        dialog = Dialog.None;
+        editing = null;
+    }
+
+    // Transactions
+
+    private async Task AddTransactionAsync()
+    {
+        if (!TryGetAmount(form.Amount, out var amountMinor))
+            return;
+
+        await RunAsync(async () =>
+        {
+            await Api.CreateTransactionAsync(
+                amountMinor, form.Currency, form.CategoryId, form.Note, form.Type,
+                selectedTagIds.Count > 0 ? selectedTagIds.ToList() : null);
+
+            selectedTagIds.Clear();
+            form = new TransactionFormModel { Currency = form.Currency, Type = form.Type };
+            await LoadAsync();
+        }, "Не удалось сохранить операцию");
+    }
+
+    private void OpenEdit(TransactionDto transaction)
+    {
+        editing = transaction;
+        editForm = new TransactionFormModel
+        {
+            Amount = transaction.AmountMinor / 100.0,
+            Currency = transaction.Currency,
+            CategoryId = transaction.CategoryId,
+            Note = transaction.Note,
+            Type = transaction.Type
+        };
+        dialog = Dialog.Edit;
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (editing is not { } original || !TryGetAmount(editForm.Amount, out var amountMinor))
+            return;
+
+        await RunAsync(async () =>
+        {
+            await Api.UpdateTransactionAsync(
+                original.Id, amountMinor, editForm.Currency, editForm.CategoryId, editForm.Note, editForm.Type);
+
+            // Budgets, goals and the summary depend on transactions, so reload everything.
+            CloseDialog();
+            await LoadAsync();
+        }, "Не удалось обновить операцию");
+    }
+
+    private Task DeleteTransactionAsync(long id) =>
+        RunAsync(async () =>
+        {
+            await Api.DeleteTransactionAsync(id);
+            await LoadAsync();
+        }, "Не удалось удалить операцию");
+
+    private Task ExportCsvAsync() =>
+        RunAsync(async () =>
+        {
+            var bytes = await Api.ExportCsvAsync();
+            if (bytes.Length > 0)
+                await JS.InvokeVoidAsync("expensesUtils.downloadCsv", bytes, $"expenses_{DateTime.Now:yyyyMMdd}.csv");
+        }, "Не удалось экспортировать");
+
+    // Recurring transactions
+
+    private async Task<bool> AddRecurringAsync(RecurringTransactionForm rule)
+    {
+        if (!TryGetAmount(rule.Amount, out var amountMinor))
+            return false;
+
+        return await RunAsync(async () =>
+        {
+            await Api.CreateRecurringTransactionAsync(
+                amountMinor, rule.Currency, rule.CategoryId, rule.Note, rule.Pattern, rule.Type);
+            recurringTransactions = await Api.GetRecurringTransactionsAsync();
+        }, "Не удалось создать повторяющуюся операцию");
+    }
+
+    private Task ExecuteRecurringAsync(long id) =>
+        RunAsync(async () =>
+        {
+            await Api.ExecuteRecurringTransactionAsync(id);
+            await LoadAsync();
+        }, "Не удалось выполнить");
+
+    private Task DeleteRecurringAsync(long id) =>
+        RunAsync(async () =>
+        {
+            await Api.DeleteRecurringTransactionAsync(id);
+            recurringTransactions.RemoveAll(r => r.Id == id);
+        }, "Не удалось удалить");
+
+    // Categories
+
+    private async Task<bool> AddCategoryAsync(NewCategoryForm category)
+    {
+        if (string.IsNullOrWhiteSpace(category.Name))
+        {
+            error = "Введите название категории.";
+            return false;
+        }
+
+        return await RunAsync(
+            async () => categories.Add(await Api.CreateCategoryAsync(category.Name, category.Icon)),
+            "Не удалось создать категорию");
+    }
+
+    private Task DeleteCategoryAsync(long id) =>
+        RunAsync(async () =>
+        {
+            await Api.DeleteCategoryAsync(id);
+            await LoadAsync();
+        }, "Не удалось удалить категорию");
+
+    private Task ArchiveCategoryAsync(long id) =>
+        RunAsync(async () =>
+        {
+            var updated = await Api.ArchiveCategoryAsync(id);
+            var index = categories.FindIndex(c => c.Id == id);
+            if (index >= 0)
+                categories[index] = updated;
+        }, "Не удалось архивировать");
+
+    // Budgets and goals
+
+    private async Task<bool> AddBudgetAsync(BudgetForm budget)
+    {
+        if (!TryGetAmount(budget.Amount, out var amountMinor))
+            return false;
+
+        if (budget.EndDate <= budget.StartDate)
+        {
+            error = "Дата окончания должна быть позже даты начала.";
+            return false;
+        }
+
+        return await RunAsync(async () =>
+        {
+            await Api.CreateBudgetAsync(
+                amountMinor, budget.Currency, budget.CategoryId,
+                DateTime.SpecifyKind(budget.StartDate.Date, DateTimeKind.Utc),
+                DateTime.SpecifyKind(budget.EndDate.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc));
+            budgets = await Api.GetBudgetsAsync();
+        }, "Не удалось создать бюджет");
+    }
+
+    private Task DeleteBudgetAsync(long id) =>
+        RunAsync(async () =>
+        {
+            await Api.DeleteBudgetAsync(id);
+            budgets.RemoveAll(b => b.Id == id);
+        }, "Не удалось удалить бюджет");
+
+    private async Task<bool> AddGoalAsync(GoalForm goal)
+    {
+        if (string.IsNullOrWhiteSpace(goal.Name))
+        {
+            error = "Введите название цели.";
+            return false;
+        }
+
+        if (!TryGetAmount(goal.TargetAmount, out var amountMinor))
+            return false;
+
+        return await RunAsync(async () =>
+        {
+            await Api.CreateGoalAsync(goal.Name, amountMinor, goal.Currency, goal.CategoryId, goal.TargetDate);
+
+            // A goal without a category gets its own one, so refresh both.
+            goals = await Api.GetGoalsAsync();
+            categories = await Api.GetCategoriesAsync();
+        }, "Не удалось создать цель");
+    }
+
+    private Task DeleteGoalAsync(long id) =>
+        RunAsync(async () =>
+        {
+            await Api.DeleteGoalAsync(id);
+            goals.RemoveAll(g => g.Id == id);
+        }, "Не удалось удалить цель");
+
+    private Task ContributeToGoalAsync(GoalContribution contribution) =>
+        RunAsync(async () =>
+        {
+            await Api.ContributeToGoalAsync(contribution.GoalId, contribution.AmountMinor);
+            await LoadAsync();
+        }, "Не удалось внести вклад");
+
+    // Tags
+
+    private void ToggleTagSelection(long tagId)
+    {
+        if (!selectedTagIds.Remove(tagId))
+            selectedTagIds.Add(tagId);
+    }
+
+    private async Task AddTagAsync(NewTagForm tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag.Name))
+        {
+            error = "Введите название тега.";
+            return;
+        }
+
+        await RunAsync(async () => tags.Add(await Api.CreateTagAsync(tag.Name, tag.Color)), "Не удалось создать тег");
+    }
+
+    private Task DeleteTagAsync(long id) =>
+        RunAsync(async () =>
+        {
+            await Api.DeleteTagAsync(id);
+            tags.RemoveAll(t => t.Id == id);
+            selectedTagIds.Remove(id);
+        }, "Не удалось удалить тег");
+
+    // Account
+
+    private Task DeleteAccountAsync() =>
+        RunAsync(async () =>
+        {
+            await Api.DeleteAccountAsync();
+            CloseDialog();
+
+            // The next request creates a fresh account with default categories.
+            currency = (await Api.GetProfileAsync()).DefaultCurrency;
+            await LoadAsync();
+        }, "Не удалось удалить аккаунт");
+
+    // Theme and Telegram integration
+
+    private async Task LoadThemeAsync()
+    {
+        string? saved = null;
+        await TryJsAsync(async () => saved = await JS.InvokeAsync<string?>("localStorage.getItem", ThemeStorageKey));
+
+        if (saved is "dark" or "light")
+        {
+            darkTheme = saved == "dark";
+            return;
+        }
+
+        // No explicit choice yet: follow the Telegram colour scheme.
+        await TryJsAsync(async () => darkTheme = await Telegram.IsDarkThemeAsync());
+    }
+
+    private async Task ToggleThemeAsync()
+    {
+        darkTheme = !darkTheme;
+        await TryJsAsync(async () => await JS.InvokeVoidAsync("localStorage.setItem", ThemeStorageKey, darkTheme ? "dark" : "light"));
+    }
+
+    /// <summary>
+    /// Supports deep links like t.me/your_bot/app?startapp=expense_1500_Lunch
+    /// to open the app with the amount (and optionally a note) pre-filled.
+    /// Telegram only allows A-Z, a-z, 0-9, "_" and "-" in startapp.
+    /// </summary>
+    private async Task ApplyStartParameterAsync()
+    {
+        string? startParam = null;
+        await TryJsAsync(async () => startParam = await Telegram.GetStartParamAsync("expense"));
+
+        if (string.IsNullOrWhiteSpace(startParam))
+            return;
+
+        var parts = startParam.Split('_', 2);
+        if (decimal.TryParse(parts[0], NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) && amount > 0)
+        {
+            form.Amount = (double)amount;
+            if (parts.Length == 2)
+                form.Note = parts[1];
+        }
+    }
+
+    // Helpers
+
+    private bool TryGetAmount(double amount, out long amountMinor)
+    {
+        amountMinor = Money.ToMinor(amount);
+
+        if (amountMinor <= 0)
+        {
+            error = "Сумма должна быть больше нуля.";
+            return false;
+        }
+
+        if (amount > 1_000_000_000)
+        {
+            error = "Слишком большая сумма.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Runs an API action with the saving flag set and shows errors in the banner.
+    /// Child forms call some handlers through a plain Func (to learn whether saving
+    /// succeeded), which does not re-render this page, hence the explicit StateHasChanged.
+    /// </summary>
+    private async Task<bool> RunAsync(Func<Task> action, string errorPrefix)
+    {
+        saving = true;
+        error = null;
+        StateHasChanged();
+
+        try
+        {
+            await action();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = $"{errorPrefix}: {ex.Message}";
+            return false;
+        }
+        finally
+        {
+            saving = false;
+            StateHasChanged();
+        }
+    }
+
+    private static async Task TryJsAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (JSException)
+        {
+            // Not running inside Telegram or storage is unavailable.
+        }
+        catch (InvalidOperationException)
+        {
+            // JS interop not available (e.g. during prerendering or tests).
+        }
+    }
+}

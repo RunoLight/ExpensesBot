@@ -1,0 +1,9 @@
+<div class="error-message" role="alert">
+    <span>@Message</span>
+    <button type="button" class="btn-icon-textless" title="Закрыть" @onclick="OnDismiss">✕</button>
+</div>
+
+@code {
+    [Parameter] public string Message { get; set; } = "";
+    [Parameter] public EventCallback OnDismiss { get; set; }
+}

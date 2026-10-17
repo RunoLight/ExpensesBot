@@ -1,0 +1,22 @@
+<div class="panel-heading-row">
+    <h2>@Title</h2>
+    <div class="panel-heading-actions">
+        @ChildContent
+        @if (OnToggleForm.HasDelegate)
+        {
+            <button type="button" class="btn-icon" title="@(FormOpen ? "Закрыть" : AddTitle)" @onclick="OnToggleForm">
+                @(FormOpen ? "✕" : "+")
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public bool FormOpen { get; set; }
+    [Parameter] public string AddTitle { get; set; } = "Добавить";
+    [Parameter] public EventCallback OnToggleForm { get; set; }
+
+    /// <summary>Extra buttons placed before the add/close button.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

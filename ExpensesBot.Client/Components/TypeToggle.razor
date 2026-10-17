@@ -1,0 +1,19 @@
+<div class="type-toggle">
+    <button type="button"
+            class="@(Value == TransactionType.Expense ? "active expense" : null)"
+            @onclick="() => SetAsync(TransactionType.Expense)">
+        📉 Расход
+    </button>
+    <button type="button"
+            class="@(Value == TransactionType.Income ? "active income" : null)"
+            @onclick="() => SetAsync(TransactionType.Income)">
+        📈 Доход
+    </button>
+</div>
+
+@code {
+    [Parameter] public TransactionType Value { get; set; }
+    [Parameter] public EventCallback<TransactionType> ValueChanged { get; set; }
+
+    private Task SetAsync(TransactionType type) => ValueChanged.InvokeAsync(type);
+}

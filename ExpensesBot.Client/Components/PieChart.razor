@@ -1,0 +1,69 @@
+@if (paths.Count > 0)
+{
+    <div class="pie-chart">
+        <svg viewBox="0 0 200 200" class="pie-chart__svg" role="img" aria-label="Диаграмма расходов по категориям">
+            @foreach (var (path, color) in paths)
+            {
+                <path d="@path" fill="@color" />
+            }
+            <circle cx="100" cy="100" r="60" class="pie-chart__hole" />
+        </svg>
+        <div class="pie-chart__legend">
+            @foreach (var slice in Slices)
+            {
+                <div class="pie-chart__legend-item">
+                    <span class="pie-chart__swatch" style="background-color: @slice.Color"></span>
+                    <span class="pie-chart__label">@slice.Label</span>
+                    <span class="pie-chart__value">@Money.Format(slice.Value)</span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public List<Slice> Slices { get; set; } = [];
+
+    private List<(string Path, string Color)> paths = [];
+
+    public sealed record Slice(string Label, long Value, string Color);
+
+    protected override void OnParametersSet()
+    {
+        var positive = Slices.Where(s => s.Value > 0).ToList();
+        var total = positive.Sum(s => s.Value);
+        paths = [];
+
+        if (total <= 0)
+            return;
+
+        double startAngle = 0;
+        foreach (var slice in positive)
+        {
+            var endAngle = startAngle + (double)slice.Value / total * 2 * Math.PI;
+            paths.Add((SlicePath(100, 100, 100, startAngle, endAngle), slice.Color));
+            startAngle = endAngle;
+        }
+    }
+
+    private static string SlicePath(double cx, double cy, double r, double startAngle, double endAngle)
+    {
+        // A single 100% slice: an arc whose start and end points coincide draws
+        // nothing, so render the full circle as two half arcs.
+        if (endAngle - startAngle >= 2 * Math.PI - 1e-6)
+        {
+            return FormattableString.Invariant(
+                $"M {cx - r} {cy} A {r} {r} 0 1 1 {cx + r} {cy} A {r} {r} 0 1 1 {cx - r} {cy} Z");
+        }
+
+        var x1 = cx + r * Math.Cos(startAngle);
+        var y1 = cy + r * Math.Sin(startAngle);
+        var x2 = cx + r * Math.Cos(endAngle);
+        var y2 = cy + r * Math.Sin(endAngle);
+        var largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+
+        // Invariant culture: SVG path data needs "12.5", never "12,5".
+        return FormattableString.Invariant(
+            $"M {cx} {cy} L {x1} {y1} A {r} {r} 0 {largeArc} 1 {x2} {y2} Z");
+    }
+}

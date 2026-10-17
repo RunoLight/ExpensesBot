@@ -1,0 +1,17 @@
+<select id="@Id" class="@CssClass" title="@Title" value="@Value" @onchange="OnChangedAsync">
+    @foreach (var currency in Money.Currencies)
+    {
+        <option value="@currency">@currency</option>
+    }
+</select>
+
+@code {
+    [Parameter] public string Value { get; set; } = "AMD";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string CssClass { get; set; } = "form-control";
+
+    private Task OnChangedAsync(ChangeEventArgs e) =>
+        ValueChanged.InvokeAsync(e.Value?.ToString() ?? Value);
+}

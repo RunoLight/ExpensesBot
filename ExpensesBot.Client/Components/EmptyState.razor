@@ -1,0 +1,11 @@
+<div class="empty-state">
+    <div class="empty-state__icon">@Icon</div>
+    <strong>@Title</strong>
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public string Icon { get; set; } = "📋";
+    [Parameter] public string Title { get; set; } = "Пока пусто";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

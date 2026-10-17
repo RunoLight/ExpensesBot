@@ -1,0 +1,98 @@
+<section class="panel">
+    <PanelHeader Title="Категории" AddTitle="Новая категория" FormOpen="showForm" OnToggleForm="() => showForm = !showForm">
+        <button type="button" class="btn-icon @(manageMode ? "btn-icon--active" : null)" title="Управление категориями" @onclick="() => manageMode = !manageMode">📋</button>
+    </PanelHeader>
+
+    @if (showForm)
+    {
+        <EditForm Model="form" OnValidSubmit="SubmitAsync">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="cat-name">Название</label>
+                    <InputText id="cat-name" class="form-control" @bind-Value="form.Name" />
+                </div>
+                <div class="form-group">
+                    <label for="cat-icon">Иконка</label>
+                    <InputText id="cat-icon" class="form-control" @bind-Value="form.Icon" placeholder="🛒" />
+                </div>
+            </div>
+            <button class="btn btn--primary" type="submit" disabled="@Saving">Добавить</button>
+        </EditForm>
+    }
+
+    @if (manageMode)
+    {
+        @foreach (var category in Categories)
+        {
+            <article class="list-row" @key="category.Id">
+                <span class="list-row__icon">@(category.Icon ?? "📁")</span>
+                <div class="list-row__body">@category.Name</div>
+                @if (category.IsArchived)
+                {
+                    <button type="button" class="btn-icon-textless btn-icon-textless--secondary" title="Вернуть из архива" @onclick="() => ConfirmAndArchiveAsync(category, false)">↩</button>
+                }
+                else
+                {
+                    <button type="button" class="btn-icon-textless btn-icon-textless--secondary" title="Архивировать — скрыть из форм" @onclick="() => ConfirmAndArchiveAsync(category, true)">🗂️</button>
+                }
+                <button type="button" class="btn-icon-textless btn-icon-textless--danger" title="Удалить" @onclick="() => ConfirmAndDeleteAsync(category)">✕</button>
+            </article>
+        }
+    }
+    else
+    {
+        <div class="chip-list">
+            @foreach (var category in Categories)
+            {
+                <span class="badge badge--pill @(category.IsArchived ? "badge--muted" : null)" @key="category.Id">
+                    @(category.Icon ?? "📁") @category.Name
+                    @if (category.IsArchived)
+                    {
+                        <small>архив</small>
+                    }
+                </span>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public List<CategoryDto> Categories { get; set; } = [];
+    [Parameter] public bool Saving { get; set; }
+
+    /// <summary>Saves the category and returns true on success, so the form can reset.</summary>
+    [Parameter] public Func<NewCategoryForm, Task<bool>> OnCreate { get; set; } = _ => Task.FromResult(false);
+    [Parameter] public EventCallback<long> OnArchive { get; set; }
+    [Parameter] public EventCallback<long> OnDelete { get; set; }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private bool showForm;
+    private bool manageMode;
+    private NewCategoryForm form = new();
+
+    private async Task SubmitAsync()
+    {
+        if (await OnCreate(form))
+        {
+            form = new NewCategoryForm();
+            showForm = false;
+        }
+    }
+
+    private async Task ConfirmAndArchiveAsync(CategoryDto category, bool archive)
+    {
+        var message = archive
+            ? $"Архивировать категорию «{category.Name}»? Она пропадёт из форм, но останется в истории."
+            : $"Вернуть категорию «{category.Name}» из архива?";
+
+        if (await JS.ConfirmAsync(message))
+            await OnArchive.InvokeAsync(category.Id);
+    }
+
+    private async Task ConfirmAndDeleteAsync(CategoryDto category)
+    {
+        if (await JS.ConfirmAsync($"Удалить категорию «{category.Name}»? Операции останутся, но без категории."))
+            await OnDelete.InvokeAsync(category.Id);
+    }
+}

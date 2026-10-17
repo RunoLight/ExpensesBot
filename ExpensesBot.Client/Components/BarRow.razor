@@ -1,0 +1,19 @@
+<div class="bar-row">
+    <span class="bar-row__label">@Label</span>
+    <div class="bar-row__track">
+        <div class="bar-row__fill" style="width: @Width"></div>
+    </div>
+    <span class="bar-row__amount">@Amount</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string Amount { get; set; } = "";
+    [Parameter] public long Value { get; set; }
+    [Parameter] public long Max { get; set; }
+
+    // Invariant culture: "45.5%", never the invalid CSS "45,5%".
+    private string Width =>
+        (Max > 0 ? Math.Clamp(Value * 100.0 / Max, 0, 100) : 0)
+            .ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+}
