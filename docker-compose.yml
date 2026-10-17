@@ -1,0 +1,35 @@
+# API + Worker sharing one SQLite database on a named volume.
+#   cp .env.example .env   # then fill in TELEGRAM_BOT_TOKEN
+#   docker compose up -d --build
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: ExpensesBot.Api/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:?Set TELEGRAM_BOT_TOKEN in .env}
+      Cors__AllowedOrigins__0: ${CLIENT_ORIGIN:-https://runolight.github.io}
+    volumes:
+      - expenses-data:/data
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: ExpensesBot.Worker/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:?Set TELEGRAM_BOT_TOKEN in .env}
+      Telegram__WebAppUrl: ${WEBAPP_URL:-https://runolight.github.io/ExpensesBot/}
+    volumes:
+      - expenses-data:/data
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  expenses-data:
