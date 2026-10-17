@@ -1,6 +1,45 @@
-@ExpensesBot.Api_HostAddress = http://localhost:5069
+# Requests for local development. The API accepts the X-Dev-User-Id header
+# only when running with ASPNETCORE_ENVIRONMENT=Development.
 
-GET {{ExpensesBot.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+@host = http://localhost:5069
+@devUser = 123456789
+
+GET {{host}}/health
 
 ###
+
+GET {{host}}/api/profile
+X-Dev-User-Id: {{devUser}}
+
+###
+
+GET {{host}}/api/categories
+X-Dev-User-Id: {{devUser}}
+
+###
+
+POST {{host}}/api/transactions
+X-Dev-User-Id: {{devUser}}
+Content-Type: application/json
+
+{
+  "amountMinor": 150000,
+  "currency": "AMD",
+  "categoryId": null,
+  "note": "Groceries",
+  "type": 0
+}
+
+###
+
+GET {{host}}/api/transactions?limit=20
+X-Dev-User-Id: {{devUser}}
+
+###
+
+GET {{host}}/api/transactions/summary?mode=month&currency=AMD
+X-Dev-User-Id: {{devUser}}
+
+###
+
+GET {{host}}/api/exchange/rates

@@ -1,0 +1,38 @@
+namespace ExpensesBot.Api.Common;
+
+public enum ErrorKind
+{
+    Validation,
+    NotFound,
+    Conflict
+}
+
+/// <summary>An expected failure of a business operation (not an exception).</summary>
+public sealed record Error(ErrorKind Kind, string Message)
+{
+    public static Error Validation(string message) => new(ErrorKind.Validation, message);
+
+    public static Error NotFound(string message = "Not found.") => new(ErrorKind.NotFound, message);
+
+    public static Error Conflict(string message) => new(ErrorKind.Conflict, message);
+}
+
+/// <summary>Outcome of an operation that returns nothing on success.</summary>
+public readonly record struct Result(Error? Error)
+{
+    public bool IsSuccess => Error is null;
+
+    public static Result Success() => new(null);
+
+    public static implicit operator Result(Error error) => new(error);
+}
+
+/// <summary>Outcome of an operation: either a value or an <see cref="Common.Error"/>.</summary>
+public readonly record struct Result<T>(T? Value, Error? Error)
+{
+    public bool IsSuccess => Error is null;
+
+    public static implicit operator Result<T>(T value) => new(value, null);
+
+    public static implicit operator Result<T>(Error error) => new(default, error);
+}
