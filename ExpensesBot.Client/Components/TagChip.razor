@@ -6,6 +6,14 @@
           style="--tag-color: @Tag.Color"
           @onclick="OnToggle">
         @Tag.Name
+        @if (OnEdit.HasDelegate)
+        {
+            <button type="button"
+                    class="btn-icon-textless btn-icon-textless--sm"
+                    title="Изменить тег"
+                    @onclick="OnEdit"
+                    @onclick:stopPropagation>✎</button>
+        }
         @if (OnDelete.HasDelegate)
         {
             <button type="button"
@@ -27,6 +35,7 @@ else
 
     /// <summary>Set to make the chip selectable; without it the chip is a read-only label.</summary>
     [Parameter] public EventCallback OnToggle { get; set; }
+    [Parameter] public EventCallback OnEdit { get; set; }
     [Parameter] public EventCallback OnDelete { get; set; }
 
     [Inject] private IJSRuntime JS { get; set; } = default!;

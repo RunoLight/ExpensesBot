@@ -136,6 +136,23 @@ public sealed class ExpensesApiClient(HttpClient http)
             EndDateUtc = endDateUtc
         }, ct);
 
+    public Task<BudgetDto> UpdateBudgetAsync(
+        long id,
+        long amountMinor,
+        string currency,
+        long? categoryId,
+        DateTime startDateUtc,
+        DateTime endDateUtc,
+        CancellationToken ct = default) =>
+        SendAsync<BudgetDto>(HttpMethod.Put, $"api/budgets/{id}", new
+        {
+            AmountMinor = amountMinor,
+            Currency = currency,
+            CategoryId = categoryId,
+            StartDateUtc = startDateUtc,
+            EndDateUtc = endDateUtc
+        }, ct);
+
     public Task DeleteBudgetAsync(long id, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Delete, $"api/budgets/{id}", null, ct);
 
@@ -177,6 +194,20 @@ public sealed class ExpensesApiClient(HttpClient http)
             TargetDateUtc = targetDateUtc
         }, ct);
 
+    public Task<GoalDto> UpdateGoalAsync(
+        long id,
+        string name,
+        long targetAmountMinor,
+        DateTime? targetDateUtc,
+        CancellationToken ct = default) =>
+        SendAsync<GoalDto>(HttpMethod.Put, $"api/goals/{id}", new
+        {
+            Name = name,
+            TargetAmountMinor = targetAmountMinor,
+            TargetDateUtc = targetDateUtc,
+            IsActive = true
+        }, ct);
+
     public Task DeleteGoalAsync(long id, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Delete, $"api/goals/{id}", null, ct);
 
@@ -190,6 +221,9 @@ public sealed class ExpensesApiClient(HttpClient http)
 
     public Task<TagDto> CreateTagAsync(string name, string color = "#36A2EB", CancellationToken ct = default) =>
         SendAsync<TagDto>(HttpMethod.Post, "api/tags", new { Name = name, Color = color }, ct);
+
+    public Task<TagDto> UpdateTagAsync(long id, string name, string color, CancellationToken ct = default) =>
+        SendAsync<TagDto>(HttpMethod.Put, $"api/tags/{id}", new { Name = name, Color = color }, ct);
 
     public Task DeleteTagAsync(long id, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Delete, $"api/tags/{id}", null, ct);

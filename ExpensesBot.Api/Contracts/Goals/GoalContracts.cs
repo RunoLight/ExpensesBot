@@ -7,6 +7,16 @@ public sealed record CreateGoalRequest(
     long? CategoryId,
     DateTime? TargetDateUtc);
 
+/// <summary>
+/// The currency and category of a goal are fixed: contributions already
+/// recorded in them would stop counting.
+/// </summary>
+public sealed record UpdateGoalRequest(
+    string? Name,
+    long TargetAmountMinor,
+    DateTime? TargetDateUtc,
+    bool IsActive = true);
+
 public sealed record ContributeToGoalRequest(
     long AmountMinor);
 

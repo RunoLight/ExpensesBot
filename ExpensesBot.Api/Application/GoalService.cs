@@ -134,6 +134,45 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
             category.Name, category.Icon, goal.TargetDateUtc, 0, 0, goal.IsActive, goal.CreatedAtUtc);
     }
 
+    /// <summary>Renames the goal or changes its target. Currency and category stay as they are.</summary>
+    public async Task<Result<GoalResponse>> UpdateAsync(long userId, long id, UpdateGoalRequest request, CancellationToken ct)
+    {
+        var goal = await db.Goals.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct);
+        if (goal is null)
+            return Error.NotFound();
+
+        var name = request.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name) || name.Length > MaxNameLength)
+            return Error.Validation($"Name must be 1-{MaxNameLength} characters.");
+
+        if (Rules.ValidateAmount(request.TargetAmountMinor, "Target amount") is { } amountError)
+            return amountError;
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        if (goal.CategoryId is null && name != goal.Name)
+        {
+            // Goals from before goal categories find their contributions by note,
+            // so the notes have to follow the new name.
+            var oldNote = ContributionNote(goal.Name);
+            var newNote = ContributionNote(name);
+
+            await db.Transactions
+                .Where(t => t.UserId == userId && t.Type == TransactionType.Income && t.Note == oldNote)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.Note, newNote), ct);
+        }
+
+        goal.Name = name;
+        goal.TargetAmountMinor = request.TargetAmountMinor;
+        goal.TargetDateUtc = Rules.ToUtc(request.TargetDateUtc);
+        goal.IsActive = request.IsActive;
+
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+
+        return (await GetAllAsync(userId, ct)).Single(g => g.Id == id);
+    }
+
     public async Task<Result> DeleteAsync(long userId, long id, CancellationToken ct)
     {
         var deleted = await db.Goals

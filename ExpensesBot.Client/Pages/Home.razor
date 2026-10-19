@@ -45,6 +45,7 @@
                    Categories="categories"
                    Saving="saving"
                    OnCreate="AddGoalAsync"
+                   OnUpdate="UpdateGoalAsync"
                    OnContribute="ContributeToGoalAsync"
                    OnDelete="DeleteGoalAsync" />
 
@@ -52,6 +53,7 @@
                      Categories="categories"
                      Saving="saving"
                      OnCreate="AddBudgetAsync"
+                     OnUpdate="UpdateBudgetAsync"
                      OnDelete="DeleteBudgetAsync" />
 
             <TransactionForm Form="form"
@@ -62,6 +64,7 @@
                              OnSubmit="AddTransactionAsync"
                              OnToggleTag="ToggleTagSelection"
                              OnAddTag="AddTagAsync"
+                             OnUpdateTag="UpdateTagAsync"
                              OnDeleteTag="DeleteTagAsync" />
 
             <TransactionList Transactions="transactions"
@@ -382,7 +385,35 @@
 
     private async Task<bool> AddBudgetAsync(BudgetForm budget)
     {
-        if (!TryGetAmount(budget.Amount, out var amountMinor))
+        if (!TryValidateBudget(budget, out var amountMinor))
+            return false;
+
+        return await RunAsync(async () =>
+        {
+            await Api.CreateBudgetAsync(
+                amountMinor, budget.Currency, budget.CategoryId,
+                BudgetStartUtc(budget), BudgetEndUtc(budget));
+            budgets = await Api.GetBudgetsAsync();
+        }, "Не удалось создать бюджет");
+    }
+
+    private async Task<bool> UpdateBudgetAsync(long id, BudgetForm budget)
+    {
+        if (!TryValidateBudget(budget, out var amountMinor))
+            return false;
+
+        return await RunAsync(async () =>
+        {
+            await Api.UpdateBudgetAsync(
+                id, amountMinor, budget.Currency, budget.CategoryId,
+                BudgetStartUtc(budget), BudgetEndUtc(budget));
+            budgets = await Api.GetBudgetsAsync();
+        }, "Не удалось изменить бюджет");
+    }
+
+    private bool TryValidateBudget(BudgetForm budget, out long amountMinor)
+    {
+        if (!TryGetAmount(budget.Amount, out amountMinor))
             return false;
 
         if (budget.EndDate <= budget.StartDate)
@@ -391,15 +422,15 @@
             return false;
         }
 
-        return await RunAsync(async () =>
-        {
-            await Api.CreateBudgetAsync(
-                amountMinor, budget.Currency, budget.CategoryId,
-                DateTime.SpecifyKind(budget.StartDate.Date, DateTimeKind.Utc),
-                DateTime.SpecifyKind(budget.EndDate.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc));
-            budgets = await Api.GetBudgetsAsync();
-        }, "Не удалось создать бюджет");
+        return true;
     }
+
+    // A budget covers whole days: from the start of the first to the end of the last.
+    private static DateTime BudgetStartUtc(BudgetForm budget) =>
+        DateTime.SpecifyKind(budget.StartDate.Date, DateTimeKind.Utc);
+
+    private static DateTime BudgetEndUtc(BudgetForm budget) =>
+        DateTime.SpecifyKind(budget.EndDate.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
 
     private Task DeleteBudgetAsync(long id) =>
         RunAsync(async () =>
@@ -427,6 +458,26 @@
             goals = await Api.GetGoalsAsync();
             categories = await Api.GetCategoriesAsync();
         }, "Не удалось создать цель");
+    }
+
+    private async Task<bool> UpdateGoalAsync(long id, GoalForm goal)
+    {
+        if (string.IsNullOrWhiteSpace(goal.Name))
+        {
+            error = "Введите название цели.";
+            return false;
+        }
+
+        if (!TryGetAmount(goal.TargetAmount, out var amountMinor))
+            return false;
+
+        return await RunAsync(async () =>
+        {
+            var updated = await Api.UpdateGoalAsync(id, goal.Name, amountMinor, goal.TargetDate);
+            var index = goals.FindIndex(g => g.Id == id);
+            if (index >= 0)
+                goals[index] = updated;
+        }, "Не удалось изменить цель");
     }
 
     private Task DeleteGoalAsync(long id) =>
@@ -460,6 +511,23 @@
         }
 
         await RunAsync(async () => tags.Add(await Api.CreateTagAsync(tag.Name, tag.Color)), "Не удалось создать тег");
+    }
+
+    private async Task<bool> UpdateTagAsync(TagEdit edit)
+    {
+        if (string.IsNullOrWhiteSpace(edit.Form.Name))
+        {
+            error = "Введите название тега.";
+            return false;
+        }
+
+        return await RunAsync(async () =>
+        {
+            var updated = await Api.UpdateTagAsync(edit.Id, edit.Form.Name, edit.Form.Color);
+            var index = tags.FindIndex(t => t.Id == edit.Id);
+            if (index >= 0)
+                tags[index] = updated;
+        }, "Не удалось изменить тег");
     }
 
     private Task DeleteTagAsync(long id) =>

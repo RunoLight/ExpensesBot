@@ -2,6 +2,10 @@
     <div class="card__header">
         <span class="card__title">@Title</span>
         <span class="card__amount">@Amount</span>
+        @if (OnEdit.HasDelegate)
+        {
+            <button type="button" class="btn-icon-textless" title="Изменить" @onclick="OnEdit">✏️</button>
+        }
         @if (OnDelete.HasDelegate)
         {
             <button type="button" class="btn-icon-textless btn-icon-textless--danger" title="Удалить" @onclick="OnDelete">✕</button>
@@ -22,5 +26,6 @@
     [Parameter] public ProgressBar.ProgressColor Color { get; set; }
     [Parameter] public RenderFragment? Footer { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnEdit { get; set; }
     [Parameter] public EventCallback OnDelete { get; set; }
 }

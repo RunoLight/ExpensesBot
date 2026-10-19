@@ -295,6 +295,64 @@ public class GoalsTests : BunitContext
     }
 }
 
+public class BudgetsTests : BunitContext
+{
+    [Fact]
+    public void EditButton_PrefillsTheFormAndSavesThroughOnUpdate()
+    {
+        var budget = new BudgetDto(9, 50_000, "USD", null, null, null,
+            new DateTime(2026, 10, 1), new DateTime(2026, 10, 31, 23, 59, 59), true, 0, 0);
+
+        (long Id, BudgetForm Form)? updated = null;
+        var created = false;
+
+        var cut = Render<Budgets>(p => p
+            .Add(x => x.Items, new List<BudgetDto> { budget })
+            .Add(x => x.OnCreate, _ => { created = true; return Task.FromResult(true); })
+            .Add(x => x.OnUpdate, (id, form) => { updated = (id, form); return Task.FromResult(true); }));
+
+        cut.Find("button[title='Изменить']").Click();
+
+        cut.Find("#budget-amount").GetAttribute("value").Should().Be("500");
+        cut.Find("button[type='submit']").TextContent.Should().Contain("Сохранить");
+
+        cut.Find("#budget-amount").Change("750");
+        cut.Find("form").Submit();
+
+        created.Should().BeFalse();
+        updated.Should().NotBeNull();
+        updated!.Value.Id.Should().Be(9);
+        updated.Value.Form.Amount.Should().Be(750);
+        updated.Value.Form.Currency.Should().Be("USD");
+        updated.Value.Form.EndDate.Should().Be(new DateTime(2026, 10, 31));
+    }
+}
+
+public class TagSelectorTests : BunitContext
+{
+    [Fact]
+    public void EditingATag_SendsTheNewNameAndColour()
+    {
+        TagEdit? edit = null;
+        var tag = new TagDto(3, "отпуск", "#36A2EB", DateTime.UtcNow);
+
+        var cut = Render<TagSelector>(p => p
+            .Add(x => x.Tags, new List<TagDto> { tag })
+            .Add(x => x.OnUpdateTag, e => { edit = e; return Task.FromResult(true); }));
+
+        cut.Find("button[title='Изменить тег']").Click();
+        cut.Find("#tag-name").Change("Отпуск 2026");
+        cut.Find(".color-swatch").Click();
+        cut.Find(".tag-selector__form .btn--primary").Click();
+
+        edit.Should().NotBeNull();
+        edit!.Id.Should().Be(3);
+        edit.Form.Name.Should().Be("Отпуск 2026");
+        edit.Form.Color.Should().Be(TagColors.Next("#36A2EB"));
+        cut.FindAll(".tag-selector__form").Should().BeEmpty("the form closes after saving");
+    }
+}
+
 public class HelpModalTests : BunitContext
 {
     [Fact]

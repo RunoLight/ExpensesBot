@@ -20,6 +20,9 @@ public static class GoalsEndpoints
         group.MapPost("/", async (CreateGoalRequest request, ClaimsPrincipal user, GoalService service, CancellationToken ct) =>
             (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(g => $"/api/goals/{g.Id}"));
 
+        group.MapPut("/{id:long}", async (long id, UpdateGoalRequest request, ClaimsPrincipal user, GoalService service, CancellationToken ct) =>
+            (await service.UpdateAsync(user.GetUserId(), id, request, ct)).ToOk());
+
         group.MapDelete("/{id:long}", async (long id, ClaimsPrincipal user, GoalService service, CancellationToken ct) =>
             (await service.DeleteAsync(user.GetUserId(), id, ct)).ToNoContent());
 

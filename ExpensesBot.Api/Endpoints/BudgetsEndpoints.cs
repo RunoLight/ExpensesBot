@@ -20,6 +20,9 @@ public static class BudgetsEndpoints
         group.MapPost("/", async (CreateBudgetRequest request, ClaimsPrincipal user, BudgetService service, CancellationToken ct) =>
             (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(b => $"/api/budgets/{b.Id}"));
 
+        group.MapPut("/{id:long}", async (long id, UpdateBudgetRequest request, ClaimsPrincipal user, BudgetService service, CancellationToken ct) =>
+            (await service.UpdateAsync(user.GetUserId(), id, request, ct)).ToOk());
+
         group.MapDelete("/{id:long}", async (long id, ClaimsPrincipal user, BudgetService service, CancellationToken ct) =>
             (await service.DeleteAsync(user.GetUserId(), id, ct)).ToNoContent());
 

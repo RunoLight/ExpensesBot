@@ -24,6 +24,7 @@
                      Saving="Saving"
                      OnToggleTag="OnToggleTag"
                      OnAddTag="OnAddTag"
+                     OnUpdateTag="OnUpdateTag"
                      OnDeleteTag="OnDeleteTag" />
 
         <button class="btn btn--primary" type="submit" disabled="@Saving">
@@ -42,5 +43,6 @@
     [Parameter] public EventCallback OnSubmit { get; set; }
     [Parameter] public EventCallback<long> OnToggleTag { get; set; }
     [Parameter] public EventCallback<NewTagForm> OnAddTag { get; set; }
+    [Parameter] public Func<TagEdit, Task<bool>> OnUpdateTag { get; set; } = _ => Task.FromResult(false);
     [Parameter] public EventCallback<long> OnDeleteTag { get; set; }
 }

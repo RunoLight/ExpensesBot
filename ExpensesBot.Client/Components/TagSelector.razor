@@ -1,7 +1,7 @@
 <div>
     <div class="tag-selector__header">
         <span class="field-label">Теги</span>
-        <button type="button" class="btn-icon btn-icon--sm" title="@(showForm ? "Закрыть" : "Новый тег")" @onclick="() => showForm = !showForm">
+        <button type="button" class="btn-icon btn-icon--sm" title="@(showForm ? "Закрыть" : "Новый тег")" @onclick="ToggleForm">
             @(showForm ? "✕" : "+")
         </button>
     </div>
@@ -18,7 +18,7 @@
                     <span style="background-color: @newTag.Color"></span>
                 </button>
             </div>
-            <button class="btn btn--primary" type="button" disabled="@Saving" @onclick="AddAsync">Добавить тег</button>
+            <button class="btn btn--primary" type="button" disabled="@Saving" @onclick="SubmitAsync">@(editingId is null ? "Добавить тег" : "Сохранить тег")</button>
         </div>
     }
 
@@ -31,6 +31,7 @@
                          Tag="tag"
                          Selected="SelectedTagIds.Contains(tag.Id)"
                          OnToggle="() => OnToggleTag.InvokeAsync(tag.Id)"
+                         OnEdit="() => StartEdit(tag)"
                          OnDelete="() => OnDeleteTag.InvokeAsync(tag.Id)" />
             }
         </div>
@@ -46,20 +47,50 @@
 
     /// <summary>Receives the new tag; the parent validates and saves it.</summary>
     [Parameter] public EventCallback<NewTagForm> OnAddTag { get; set; }
+
+    /// <summary>Saves a renamed or recoloured tag; true on success.</summary>
+    [Parameter] public Func<TagEdit, Task<bool>> OnUpdateTag { get; set; } = _ => Task.FromResult(false);
     [Parameter] public EventCallback<long> OnDeleteTag { get; set; }
 
     private bool showForm;
+    private long? editingId;
     private NewTagForm newTag = new();
 
-    private async Task AddAsync()
+    private void ToggleForm()
     {
-        var countBefore = Tags.Count;
-        await OnAddTag.InvokeAsync(newTag);
+        showForm = !showForm;
+        editingId = null;
+        newTag = new NewTagForm();
+    }
 
-        // Close the form only when the tag was actually created.
-        if (Tags.Count > countBefore)
+    private void StartEdit(TagDto tag)
+    {
+        editingId = tag.Id;
+        newTag = NewTagForm.From(tag);
+        showForm = true;
+    }
+
+    private async Task SubmitAsync()
+    {
+        bool saved;
+
+        if (editingId is { } id)
+        {
+            saved = await OnUpdateTag(new TagEdit(id, newTag));
+        }
+        else
+        {
+            var countBefore = Tags.Count;
+            await OnAddTag.InvokeAsync(newTag);
+
+            // Close the form only when the tag was actually created.
+            saved = Tags.Count > countBefore;
+        }
+
+        if (saved)
         {
             newTag = new NewTagForm();
+            editingId = null;
             showForm = false;
         }
     }

@@ -20,6 +20,9 @@ public static class TagEndpoints
         group.MapPost("/", async (CreateTagRequest request, ClaimsPrincipal user, TagService service, CancellationToken ct) =>
             (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(t => $"/api/tags/{t.Id}"));
 
+        group.MapPut("/{id:long}", async (long id, UpdateTagRequest request, ClaimsPrincipal user, TagService service, CancellationToken ct) =>
+            (await service.UpdateAsync(user.GetUserId(), id, request, ct)).ToOk());
+
         group.MapDelete("/{id:long}", async (long id, ClaimsPrincipal user, TagService service, CancellationToken ct) =>
             (await service.DeleteAsync(user.GetUserId(), id, ct)).ToNoContent());
 

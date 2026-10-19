@@ -19,3 +19,10 @@ public sealed record CreateBudgetRequest(
     long? CategoryId,
     DateTime StartDateUtc,
     DateTime EndDateUtc);
+
+public sealed record UpdateBudgetRequest(
+    long AmountMinor,
+    string Currency,
+    long? CategoryId,
+    DateTime StartDateUtc,
+    DateTime EndDateUtc);

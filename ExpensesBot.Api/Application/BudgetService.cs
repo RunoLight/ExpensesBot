@@ -113,6 +113,78 @@ public sealed class BudgetService(ExpensesDbContext db)
             budget.IsActive, 0, 0);
     }
 
+    public async Task<Result<BudgetResponse>> UpdateAsync(long userId, long id, UpdateBudgetRequest request, CancellationToken ct)
+    {
+        var budget = await db.Budgets.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct);
+        if (budget is null)
+            return Error.NotFound();
+
+        if (Rules.ValidateAmount(request.AmountMinor) is { } amountError)
+            return amountError;
+
+        if (request.EndDateUtc <= request.StartDateUtc)
+            return Error.Validation("End date must be after start date.");
+
+        if (Rules.ValidateCurrency(request.Currency, out var currency) is { } currencyError)
+            return currencyError;
+
+        Category? category = null;
+        if (request.CategoryId.HasValue)
+        {
+            // An archived category may stay if the budget already uses it.
+            category = await db.Categories.AsNoTracking().FirstOrDefaultAsync(
+                x => x.Id == request.CategoryId.Value &&
+                     x.UserId == userId &&
+                     (!x.IsArchived || x.Id == budget.CategoryId),
+                ct);
+
+            if (category is null)
+                return Error.Validation("Category not found.");
+        }
+
+        var startUtc = DateTime.SpecifyKind(request.StartDateUtc, DateTimeKind.Utc);
+        var endUtc = DateTime.SpecifyKind(request.EndDateUtc, DateTimeKind.Utc);
+
+        var limitChanged =
+            budget.AmountMinor != request.AmountMinor ||
+            budget.Currency != currency ||
+            budget.CategoryId != category?.Id ||
+            budget.StartDateUtc != startUtc ||
+            budget.EndDateUtc != endUtc;
+
+        budget.AmountMinor = request.AmountMinor;
+        budget.Currency = currency;
+        budget.CategoryId = category?.Id;
+        budget.StartDateUtc = startUtc;
+        budget.EndDateUtc = endUtc;
+
+        await db.SaveChangesAsync(ct);
+
+        if (limitChanged)
+        {
+            // The 90% alert is sent once per budget. A new limit or period is
+            // effectively a new budget, so let the Worker alert about it again.
+            var alertKey = NotificationLog.BudgetKey(budget.Id);
+            await db.NotificationLogs
+                .Where(x => x.UserId == userId && x.Kind == NotificationKind.BudgetAlert && x.Key == alertKey)
+                .ExecuteDeleteAsync(ct);
+        }
+
+        var spent = await db.Transactions
+            .Where(t => t.UserId == userId &&
+                        t.Type == TransactionType.Expense &&
+                        t.Currency == budget.Currency &&
+                        t.OccurredAtUtc >= budget.StartDateUtc &&
+                        t.OccurredAtUtc <= budget.EndDateUtc &&
+                        (budget.CategoryId == null || t.CategoryId == budget.CategoryId))
+            .SumAsync(t => t.AmountMinor, ct);
+
+        return new BudgetResponse(
+            budget.Id, budget.AmountMinor, budget.Currency, budget.CategoryId,
+            category?.Name, category?.Icon, budget.StartDateUtc, budget.EndDateUtc,
+            budget.IsActive, spent, ProgressMath.Percent(spent, budget.AmountMinor));
+    }
+
     public async Task<Result> DeleteAsync(long userId, long id, CancellationToken ct)
     {
         var deleted = await db.Budgets

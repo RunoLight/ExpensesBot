@@ -21,35 +21,44 @@ public sealed partial class TagService(ExpensesDbContext db)
 
     public async Task<Result<TagResponse>> CreateAsync(long userId, CreateTagRequest request, CancellationToken ct)
     {
-        var name = request.Name?.Trim() ?? string.Empty;
-        if (name.Length is 0 or > Rules.MaxTagNameLength)
-            return Error.Validation($"Tag name must be 1-{Rules.MaxTagNameLength} characters.");
+        if (ValidateName(request.Name, out var name) is { } nameError)
+            return nameError;
 
-        var color = request.Color is not null && HexColor().IsMatch(request.Color)
-            ? request.Color.ToUpperInvariant()
-            : DefaultColor;
-
-        // SQLite compares strings case-sensitively, so compare normalised names in memory.
-        var existingNames = await db.Tags
-            .Where(x => x.UserId == userId)
-            .Select(x => x.Name)
-            .ToListAsync(ct);
-
-        if (existingNames.Any(x => string.Equals(x, name, StringComparison.OrdinalIgnoreCase)))
+        if (await NameTakenAsync(userId, name, exceptId: null, ct))
             return Error.Conflict("Tag with this name already exists.");
 
         var tag = new Tag
         {
             UserId = userId,
             Name = name,
-            Color = color,
+            Color = NormalizeColor(request.Color) ?? DefaultColor,
             CreatedAtUtc = DateTime.UtcNow
         };
 
         db.Tags.Add(tag);
         await db.SaveChangesAsync(ct);
 
-        return new TagResponse(tag.Id, tag.Name, tag.Color, tag.CreatedAtUtc);
+        return ToResponse(tag);
+    }
+
+    /// <summary>Renames or recolours a tag. An invalid colour keeps the current one.</summary>
+    public async Task<Result<TagResponse>> UpdateAsync(long userId, long id, UpdateTagRequest request, CancellationToken ct)
+    {
+        var tag = await db.Tags.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct);
+        if (tag is null)
+            return Error.NotFound();
+
+        if (ValidateName(request.Name, out var name) is { } nameError)
+            return nameError;
+
+        if (await NameTakenAsync(userId, name, exceptId: id, ct))
+            return Error.Conflict("Tag with this name already exists.");
+
+        tag.Name = name;
+        tag.Color = NormalizeColor(request.Color) ?? tag.Color;
+
+        await db.SaveChangesAsync(ct);
+        return ToResponse(tag);
     }
 
     public async Task<Result> DeleteAsync(long userId, long id, CancellationToken ct)
@@ -60,6 +69,30 @@ public sealed partial class TagService(ExpensesDbContext db)
 
         return deleted == 0 ? Error.NotFound() : Result.Success();
     }
+
+    private static Error? ValidateName(string? input, out string name)
+    {
+        name = input?.Trim() ?? string.Empty;
+        return name.Length is 0 or > Rules.MaxTagNameLength
+            ? Error.Validation($"Tag name must be 1-{Rules.MaxTagNameLength} characters.")
+            : null;
+    }
+
+    private static string? NormalizeColor(string? color) =>
+        color is not null && HexColor().IsMatch(color) ? color.ToUpperInvariant() : null;
+
+    /// <summary>SQLite compares strings case-sensitively, so compare normalised names in memory.</summary>
+    private async Task<bool> NameTakenAsync(long userId, string name, long? exceptId, CancellationToken ct)
+    {
+        var existingNames = await db.Tags
+            .Where(x => x.UserId == userId && x.Id != exceptId)
+            .Select(x => x.Name)
+            .ToListAsync(ct);
+
+        return existingNames.Any(x => string.Equals(x, name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static TagResponse ToResponse(Tag tag) => new(tag.Id, tag.Name, tag.Color, tag.CreatedAtUtc);
 
     [GeneratedRegex("^#[0-9A-Fa-f]{6}$")]
     private static partial Regex HexColor();

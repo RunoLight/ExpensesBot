@@ -1,5 +1,5 @@
 <section class="panel">
-    <PanelHeader Title="Бюджеты" AddTitle="Новый бюджет" FormOpen="showForm" OnToggleForm="() => showForm = !showForm" />
+    <PanelHeader Title="Бюджеты" AddTitle="Новый бюджет" FormOpen="showForm" OnToggleForm="ToggleForm" />
 
     @foreach (var budget in Items)
     {
@@ -8,6 +8,7 @@
                       Amount="@($"{Money.Format(budget.SpentAmountMinor)} / {Money.Format(budget.AmountMinor)} {budget.Currency}")"
                       Percent="budget.ProgressPercent"
                       Color="ColorFor(budget.ProgressPercent)"
+                      OnEdit="() => StartEdit(budget)"
                       OnDelete="() => ConfirmAndDeleteAsync(budget)">
             <Footer>
                 <span>@budget.StartDateUtc.ToString("dd.MM") – @budget.EndDateUtc.ToString("dd.MM.yyyy")</span>
@@ -46,7 +47,7 @@
                     <InputDate id="budget-end" class="form-control" @bind-Value="form.EndDate" />
                 </div>
             </div>
-            <button class="btn btn--primary" type="submit" disabled="@Saving">Создать бюджет</button>
+            <button class="btn btn--primary" type="submit" disabled="@Saving">@(editingId is null ? "Создать бюджет" : "Сохранить")</button>
         </EditForm>
     }
 </section>
@@ -58,18 +59,42 @@
 
     /// <summary>Saves the budget and returns true on success, so the form can reset.</summary>
     [Parameter] public Func<BudgetForm, Task<bool>> OnCreate { get; set; } = _ => Task.FromResult(false);
+
+    /// <summary>Saves changes to the budget with the given id; true on success.</summary>
+    [Parameter] public Func<long, BudgetForm, Task<bool>> OnUpdate { get; set; } = (_, _) => Task.FromResult(false);
     [Parameter] public EventCallback<long> OnDelete { get; set; }
 
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private bool showForm;
+    private long? editingId;
     private BudgetForm form = new();
+
+    private void ToggleForm()
+    {
+        showForm = !showForm;
+        editingId = null;
+        form = new BudgetForm { Currency = form.Currency };
+    }
+
+    /// <summary>Opens the form with the budget's values; submitting saves instead of creating.</summary>
+    private void StartEdit(BudgetDto budget)
+    {
+        editingId = budget.Id;
+        form = BudgetForm.From(budget);
+        showForm = true;
+    }
 
     private async Task SubmitAsync()
     {
-        if (await OnCreate(form))
+        var saved = editingId is { } id
+            ? await OnUpdate(id, form)
+            : await OnCreate(form);
+
+        if (saved)
         {
             form = new BudgetForm { Currency = form.Currency };
+            editingId = null;
             showForm = false;
         }
     }

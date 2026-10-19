@@ -156,10 +156,10 @@ GitHub Actions runs build and tests on every push and pull request (`.github/wor
 | GET | `/api/transactions/summary?mode=all\|30days\|month&currency=AMD` | Totals, breakdowns, average and projection |
 | GET | `/api/transactions/export` | CSV export |
 | GET/POST/PUT/DELETE | `/api/categories[/{id}]`, `POST /{id}/archive` | Categories |
-| GET/POST/DELETE | `/api/budgets[/{id}]` | Budgets with spent amount and progress |
-| GET/POST/DELETE | `/api/goals[/{id}]`, `POST /{id}/contribute` | Savings goals |
+| GET/POST/PUT/DELETE | `/api/budgets[/{id}]` | Budgets with spent amount and progress |
+| GET/POST/PUT/DELETE | `/api/goals[/{id}]`, `POST /{id}/contribute` | Savings goals |
 | GET/POST/PUT/DELETE | `/api/recurring[/{id}]`, `POST /{id}/execute` | Recurring rules |
-| GET/POST/DELETE | `/api/tags[/{id}]` | Tags |
+| GET/POST/PUT/DELETE | `/api/tags[/{id}]` | Tags |
 | GET/PUT/DELETE | `/api/profile`, `/api/profile/currency` | Profile, default currency, account deletion |
 | GET/POST | `/api/exchange/rates`, `/api/exchange/convert` | Exchange rates |
 
@@ -169,7 +169,8 @@ In Development the OpenAPI document is served at `/openapi/v1.json`.
 
 - [x] Persist notification state so restarts never resend alerts
 - [ ] Move to PostgreSQL for multi-instance deployments
-- [ ] Editing budgets, goals and tags; tag filters
+- [x] Editing budgets, goals and tags
+- [ ] Tag filters
 
 ## License
 

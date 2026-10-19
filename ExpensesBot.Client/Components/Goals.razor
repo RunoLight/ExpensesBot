@@ -1,5 +1,5 @@
 <section class="panel">
-    <PanelHeader Title="Цели" AddTitle="Новая цель" FormOpen="showForm" OnToggleForm="() => showForm = !showForm" />
+    <PanelHeader Title="Цели" AddTitle="Новая цель" FormOpen="showForm" OnToggleForm="ToggleForm" />
 
     @foreach (var goal in Items.Where(g => g.IsActive))
     {
@@ -8,6 +8,7 @@
                       Amount="@($"{Money.Format(goal.SavedAmountMinor)} / {Money.Format(goal.TargetAmountMinor)} {goal.Currency}")"
                       Percent="goal.ProgressPercent"
                       Color="ColorFor(goal.ProgressPercent)"
+                      OnEdit="() => StartEdit(goal)"
                       OnDelete="() => ConfirmAndDeleteAsync(goal)">
             <Footer>
                 @if (goal.TargetDateUtc.HasValue)
@@ -44,19 +45,29 @@
                     <label for="goal-target">Целевая сумма</label>
                     <InputNumber id="goal-target" class="form-control" @bind-Value="form.TargetAmount" />
                 </div>
-                <div class="form-group">
-                    <label for="goal-currency">Валюта</label>
-                    <CurrencySelect Id="goal-currency" @bind-Value="form.Currency" />
-                </div>
+                @if (editingId is null)
+                {
+                    <div class="form-group">
+                        <label for="goal-currency">Валюта</label>
+                        <CurrencySelect Id="goal-currency" @bind-Value="form.Currency" />
+                    </div>
+                }
             </div>
 
-            <label for="goal-category">Категория</label>
-            <CategorySelect Id="goal-category" Categories="Categories" EmptyLabel="Новая категория для цели" @bind-Value="form.CategoryId" />
+            @if (editingId is null)
+            {
+                <label for="goal-category">Категория</label>
+                <CategorySelect Id="goal-category" Categories="Categories" EmptyLabel="Новая категория для цели" @bind-Value="form.CategoryId" />
+            }
+            else
+            {
+                <p class="muted">Валюта и категория цели не меняются: уже внесённые взносы записаны в них.</p>
+            }
 
             <label for="goal-date">Дата цели (необязательно)</label>
             <InputDate id="goal-date" class="form-control" @bind-Value="form.TargetDate" />
 
-            <button class="btn btn--primary" type="submit" disabled="@Saving">Создать цель</button>
+            <button class="btn btn--primary" type="submit" disabled="@Saving">@(editingId is null ? "Создать цель" : "Сохранить")</button>
         </EditForm>
     }
 </section>
@@ -68,20 +79,43 @@
 
     /// <summary>Saves the goal and returns true on success, so the form can reset.</summary>
     [Parameter] public Func<GoalForm, Task<bool>> OnCreate { get; set; } = _ => Task.FromResult(false);
+
+    /// <summary>Saves the new name, target and date of the goal with the given id; true on success.</summary>
+    [Parameter] public Func<long, GoalForm, Task<bool>> OnUpdate { get; set; } = (_, _) => Task.FromResult(false);
     [Parameter] public EventCallback<GoalContribution> OnContribute { get; set; }
     [Parameter] public EventCallback<long> OnDelete { get; set; }
 
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private bool showForm;
+    private long? editingId;
     private GoalForm form = new();
     private readonly Dictionary<long, double> contributions = [];
 
+    private void ToggleForm()
+    {
+        showForm = !showForm;
+        editingId = null;
+        form = new GoalForm { Currency = form.Currency };
+    }
+
+    private void StartEdit(GoalDto goal)
+    {
+        editingId = goal.Id;
+        form = GoalForm.From(goal);
+        showForm = true;
+    }
+
     private async Task SubmitAsync()
     {
-        if (await OnCreate(form))
+        var saved = editingId is { } id
+            ? await OnUpdate(id, form)
+            : await OnCreate(form);
+
+        if (saved)
         {
             form = new GoalForm { Currency = form.Currency };
+            editingId = null;
             showForm = false;
         }
     }
