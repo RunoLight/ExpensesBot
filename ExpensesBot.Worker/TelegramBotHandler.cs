@@ -9,8 +9,9 @@ namespace ExpensesBot.Worker;
 
 /// <summary>
 /// Handles Telegram updates. The handler is a singleton shared by all chats,
-/// so it keeps no per-user state: everything a button needs (transaction type
-/// and amount) travels inside its callback_data.
+/// so it keeps no per-user state: everything a button needs (type, amount,
+/// currency, category) travels inside its callback_data, and the note is read
+/// back from the user's message that the bot's question replies to.
 /// </summary>
 public sealed class TelegramBotHandler(
     ILogger<TelegramBotHandler> logger,
@@ -18,10 +19,16 @@ public sealed class TelegramBotHandler(
     IServiceProvider serviceProvider,
     IConfiguration configuration)
 {
-    private const decimal MaxAmount = 1_000_000_000m;
-    private const string RecordPrefix = "tx:";       // tx:e:500 / tx:i:500
+    private const decimal MaxAmount = BotEntryParser.MaxAmount;
     private const string LegacyConfirmPrefix = "confirm:"; // buttons sent by older versions
     private const string CancelData = "cancel";
+
+    public const string EntryHint =
+        "✏️ Отправьте сумму и, если хотите, описание:\n" +
+        "• 1500 кофе\n" +
+        "• +50000 зарплата — плюс значит доход\n" +
+        "• 20$ такси или такси 700 руб — другая валюта\n" +
+        "• 1,5к продукты — тысячи";
 
     private string WebAppUrl =>
         configuration["Telegram:WebAppUrl"] ?? "https://runolight.github.io/ExpensesBot/";
@@ -55,7 +62,9 @@ public sealed class TelegramBotHandler(
     {
         var text = message["text"]?.Value<string>();
         var chatId = message["chat"]?["id"]?.Value<long>();
+        var messageId = message["message_id"]?.Value<long>();
         var telegramUserId = message["from"]?["id"]?.Value<long>();
+        var firstName = message["from"]?["first_name"]?.Value<string>();
 
         if (string.IsNullOrWhiteSpace(text) || chatId is null)
             return false;
@@ -65,7 +74,7 @@ public sealed class TelegramBotHandler(
         switch (command)
         {
             case "/start":
-                await SendStartMessageAsync(botToken, chatId.Value, message["from"]?["first_name"]?.Value<string>(), ct);
+                await SendStartMessageAsync(botToken, chatId.Value, firstName, ct);
                 return true;
 
             case "/expenses":
@@ -86,13 +95,32 @@ public sealed class TelegramBotHandler(
                 return true;
         }
 
-        if (TryParseAmount(text, out var amount) && telegramUserId.HasValue)
+        if (telegramUserId.HasValue && TryParseEntry(text, out var entry))
         {
-            await AskTransactionTypeAsync(botToken, chatId.Value, telegramUserId.Value, amount, ct);
+            await AskToConfirmAsync(botToken, chatId.Value, messageId, telegramUserId.Value, firstName, entry, ct);
+            return true;
+        }
+
+        // Looks like an attempt to record something: explain the format.
+        if (text.Any(char.IsDigit))
+        {
+            await SendMessageAsync(botToken, chatId.Value, "Не понял сумму. " + EntryHint, null, ct);
             return true;
         }
 
         return false;
+    }
+
+    /// <summary>A bare amount ("1 500,50") or a free-form entry ("1500 кофе", "+20$ возврат").</summary>
+    public static bool TryParseEntry(string text, out BotEntry entry)
+    {
+        if (TryParseAmount(text, out var amount))
+        {
+            entry = new BotEntry(amount, null, null, null);
+            return true;
+        }
+
+        return BotEntryParser.TryParse(text, out entry);
     }
 
     private async Task<bool> HandleCallbackQueryAsync(
@@ -125,8 +153,7 @@ public sealed class TelegramBotHandler(
 
                 case "menu_income":
                 case "menu_expense":
-                    await SendMessageAsync(botToken, chatId.Value,
-                        "✏️ Отправьте сумму сообщением (например: 1500), а я спрошу, расход это или доход.", null, ct);
+                    await SendMessageAsync(botToken, chatId.Value, EntryHint, null, ct);
                     return true;
 
                 case "menu_goals":
@@ -136,15 +163,19 @@ public sealed class TelegramBotHandler(
                     return true;
             }
 
-            if (telegramUserId is null || !TryParseRecordCallback(data, out var type, out var amount))
+            if (telegramUserId is null || !TryParseRecord(data, out var request))
                 return false;
 
             var user = await GetOrCreateUserAsync(telegramUserId.Value, sender?["first_name"]?.Value<string>(), ct);
-            var recorded = await RecordTransactionAsync(user, amount, type, ct);
+            var note = ReadNoteFromQuestion(callbackQuery);
+            var recorded = await RecordTransactionAsync(user, request, note, ct);
 
-            var label = type == TransactionType.Income ? "Доход" : "Расход";
-            var result = recorded
-                ? $"✅ {label} {FormatAmount(amount)} {user.DefaultCurrency} записан.\n\nПодробная статистика — в приложении: /expenses"
+            var label = request.Type == TransactionType.Income ? "Доход" : "Расход";
+            var result = recorded is { } entry
+                ? $"✅ {label} {FormatAmount(request.Amount)} {entry.Transaction.Currency} записан" +
+                  (entry.Category is { } category ? $" · {category.Icon} {category.Name}" : "") +
+                  (note is not null ? $" · {note}" : "") +
+                  ".\n\nПодробная статистика — в приложении: /expenses"
                 : "Не удалось записать. Откройте приложение /expenses и попробуйте снова.";
 
             // Replacing the message text also removes the buttons, so the
@@ -169,66 +200,119 @@ public sealed class TelegramBotHandler(
     }
 
     public static string BuildRecordCallback(TransactionType type, decimal amount) =>
-        $"{RecordPrefix}{(type == TransactionType.Income ? "i" : "e")}:{amount.ToString("0.##", CultureInfo.InvariantCulture)}";
+        new RecordCallback(type, amount).Build();
 
     public static bool TryParseRecordCallback(string data, out TransactionType type, out decimal amount)
     {
-        type = TransactionType.Expense;
-        amount = 0;
-        string amountText;
-
-        if (data.StartsWith(RecordPrefix, StringComparison.Ordinal))
-        {
-            var parts = data[RecordPrefix.Length..].Split(':');
-            if (parts.Length != 2 || parts[0] is not ("e" or "i"))
-                return false;
-
-            type = parts[0] == "i" ? TransactionType.Income : TransactionType.Expense;
-            amountText = parts[1];
-        }
-        else if (data.StartsWith(LegacyConfirmPrefix, StringComparison.Ordinal))
-        {
-            amountText = data[LegacyConfirmPrefix.Length..];
-        }
-        else
-        {
-            return false;
-        }
-
-        return TryParseAmount(amountText, out amount);
+        var parsed = TryParseRecord(data, out var request);
+        type = parsed ? request.Type : TransactionType.Expense;
+        amount = parsed ? request.Amount : 0;
+        return parsed;
     }
 
-    private async Task AskTransactionTypeAsync(
+    /// <summary>Current <see cref="RecordCallback"/> buttons plus "confirm:500" from older versions (expenses).</summary>
+    public static bool TryParseRecord(string data, out RecordCallback request)
+    {
+        if (RecordCallback.TryParse(data, out request))
+            return true;
+
+        if (data.StartsWith(LegacyConfirmPrefix, StringComparison.Ordinal) &&
+            TryParseAmount(data[LegacyConfirmPrefix.Length..], out var amount))
+        {
+            request = new RecordCallback(TransactionType.Expense, amount);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>The note from the user's message the bot's question was a reply to.</summary>
+    private static string? ReadNoteFromQuestion(JObject callbackQuery)
+    {
+        var original = callbackQuery["message"]?["reply_to_message"]?["text"]?.Value<string>();
+        return original is not null && TryParseEntry(original, out var entry) ? entry.Note : null;
+    }
+
+    private async Task AskToConfirmAsync(
         string botToken,
         long chatId,
+        long? replyToMessageId,
         long telegramUserId,
-        decimal amount,
+        string? firstName,
+        BotEntry entry,
         CancellationToken ct)
     {
+        var user = await GetOrCreateUserAsync(telegramUserId, firstName, ct);
+        var currency = entry.Currency ?? user.DefaultCurrency;
+        var category = await GuessCategoryAsync(user.Id, entry.Note, ct);
+
+        string Record(TransactionType type) =>
+            new RecordCallback(type, entry.Amount, currency, category?.Id).Build();
+
+        var cancel = new { text = "❌ Отмена", callback_data = CancelData };
+
+        object[][] rows = entry.Type switch
+        {
+            TransactionType.Income =>
+            [
+                [new { text = "✅ Записать доход", callback_data = Record(TransactionType.Income) }],
+                [cancel]
+            ],
+            TransactionType.Expense =>
+            [
+                [new { text = "✅ Записать расход", callback_data = Record(TransactionType.Expense) }],
+                [cancel]
+            ],
+            _ =>
+            [
+                [
+                    new { text = "➖ Расход", callback_data = Record(TransactionType.Expense) },
+                    new { text = "➕ Доход", callback_data = Record(TransactionType.Income) }
+                ],
+                [cancel]
+            ]
+        };
+
+        var question = entry.Type is null ? "Это расход или доход?" : "Записать?";
+        var text = DescribeEntry(entry.Amount, currency, entry.Note, category) + "\n\n" + question;
+
+        // Replying to the user's message lets the button handler read the note back.
+        await SendMessageAsync(botToken, chatId, text, new { inline_keyboard = rows }, ct, replyToMessageId);
+    }
+
+    public static string DescribeEntry(decimal amount, string currency, string? note, CategoryOption? category) =>
+        $"💰 {FormatAmount(amount)} {currency}" +
+        (note is not null ? $" · {note}" : "") +
+        (category is not null ? $"\n📂 {category.Icon ?? "📁"} {category.Name}" : "");
+
+    private async Task<CategoryOption?> GuessCategoryAsync(long userId, string? note, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(note))
+            return null;
+
         await using var scope = serviceProvider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
 
-        var currency = await db.Users
-            .Where(x => x.TelegramUserId == telegramUserId)
-            .Select(x => x.DefaultCurrency)
-            .FirstOrDefaultAsync(ct) ?? Currencies.Default;
+        var categories = await LoadCategoriesAsync(db, userId, ct);
 
-        var keyboard = new
-        {
-            inline_keyboard = new object[][]
-            {
-                [
-                    new { text = "➖ Расход", callback_data = BuildRecordCallback(TransactionType.Expense, amount) },
-                    new { text = "➕ Доход", callback_data = BuildRecordCallback(TransactionType.Income, amount) }
-                ],
-                [
-                    new { text = "❌ Отмена", callback_data = CancelData }
-                ]
-            }
-        };
+        var history = await db.Transactions
+            .AsNoTracking()
+            .Where(t => t.UserId == userId && t.Note != null && t.CategoryId != null)
+            .OrderByDescending(t => t.Id)
+            .Take(200)
+            .Select(t => new { t.Note, t.CategoryId })
+            .ToListAsync(ct);
 
-        await SendMessageAsync(botToken, chatId, $"💰 {FormatAmount(amount)} {currency} — это расход или доход?", keyboard, ct);
+        return CategoryGuesser.Guess(note, categories, history.Select(h => (h.Note!, h.CategoryId!.Value)));
     }
+
+    private static Task<List<CategoryOption>> LoadCategoriesAsync(ExpensesDbContext db, long userId, CancellationToken ct) =>
+        db.Categories
+            .AsNoTracking()
+            .Where(c => c.UserId == userId && !c.IsArchived)
+            .OrderBy(c => c.Name)
+            .Select(c => new CategoryOption(c.Id, c.Name, c.Icon))
+            .ToListAsync(ct);
 
     private async Task<User> GetOrCreateUserAsync(long telegramUserId, string? firstName, CancellationToken ct)
     {
@@ -257,28 +341,42 @@ public sealed class TelegramBotHandler(
         }
     }
 
-    private async Task<bool> RecordTransactionAsync(User user, decimal amount, TransactionType type, CancellationToken ct)
+    private sealed record RecordedEntry(Transaction Transaction, CategoryOption? Category);
+
+    private async Task<RecordedEntry?> RecordTransactionAsync(User user, RecordCallback request, string? note, CancellationToken ct)
     {
-        var amountMinor = decimal.ToInt64(decimal.Round(amount * 100m, 0, MidpointRounding.AwayFromZero));
+        var amountMinor = decimal.ToInt64(decimal.Round(request.Amount * 100m, 0, MidpointRounding.AwayFromZero));
         if (amountMinor <= 0)
-            return false;
+            return null;
 
         await using var scope = serviceProvider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
 
-        db.Transactions.Add(new Transaction
+        // The id comes from a button, so check that the category is still the user's and active.
+        var category = request.CategoryId is { } categoryId
+            ? await db.Categories
+                .AsNoTracking()
+                .Where(c => c.Id == categoryId && c.UserId == user.Id && !c.IsArchived)
+                .Select(c => new CategoryOption(c.Id, c.Name, c.Icon))
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        var transaction = new Transaction
         {
             UserId = user.Id,
+            CategoryId = category?.Id,
             AmountMinor = amountMinor,
-            Currency = user.DefaultCurrency,
-            Type = type,
-            Note = type == TransactionType.Income ? "Доход из Telegram" : "Из Telegram",
+            Currency = request.Currency ?? user.DefaultCurrency,
+            Type = request.Type,
+            Note = note ?? (request.Type == TransactionType.Income ? "Доход из Telegram" : "Из Telegram"),
             OccurredAtUtc = DateTime.UtcNow,
             CreatedAtUtc = DateTime.UtcNow
-        });
+        };
 
+        db.Transactions.Add(transaction);
         await db.SaveChangesAsync(ct);
-        return true;
+
+        return new RecordedEntry(transaction, category);
     }
 
     private async Task SendWeeklyReportAsync(string botToken, long chatId, long telegramUserId, CancellationToken ct)
@@ -348,7 +446,7 @@ public sealed class TelegramBotHandler(
                    "/menu — главное меню\n" +
                    "/expenses — открыть приложение\n" +
                    "/report — сводка за 7 дней\n\n" +
-                   "Или просто отправьте сумму (например: 1500) — я спрошу, расход это или доход, и запишу.";
+                   "Или просто отправьте сумму с описанием, например «1500 кофе» или «+50000 зарплата», — я подберу категорию и запишу.";
 
         return SendMessageAsync(botToken, chatId, text, null, ct);
     }
@@ -391,11 +489,25 @@ public sealed class TelegramBotHandler(
             "📱 Главное меню:\n\nВыберите действие или откройте приложение.", keyboard, ct);
     }
 
-    private static string FormatAmount(decimal amount) =>
+    public static string FormatAmount(decimal amount) =>
         amount.ToString("0.##", CultureInfo.InvariantCulture);
 
-    private Task SendMessageAsync(string botToken, long chatId, string text, object? replyMarkup, CancellationToken ct) =>
-        CallTelegramAsync(botToken, "sendMessage", new { chat_id = chatId, text, reply_markup = replyMarkup }, ct);
+    private Task SendMessageAsync(
+        string botToken,
+        long chatId,
+        string text,
+        object? replyMarkup,
+        CancellationToken ct,
+        long? replyToMessageId = null) =>
+        CallTelegramAsync(botToken, "sendMessage", new
+        {
+            chat_id = chatId,
+            text,
+            reply_markup = replyMarkup,
+            reply_parameters = replyToMessageId is { } messageId
+                ? new { message_id = messageId, allow_sending_without_reply = true }
+                : null
+        }, ct);
 
     private Task EditOrSendAsync(string botToken, long chatId, long? messageId, string text, CancellationToken ct) =>
         messageId is null

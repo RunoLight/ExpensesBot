@@ -10,7 +10,7 @@ Built with .NET 10, ASP.NET Core Minimal APIs and EF Core.
 
 ## What it does
 
-- **Record in two taps** — send `1500` to the bot, choose *Expense* or *Income*, done.
+- **Record in two taps** — send `1500 кофе`, `+50000 зарплата` or `20$ такси` to the bot; it parses amount, currency, type and note, guesses the category from your history and asks to confirm.
 - **Mini App dashboard** — income, expenses and balance converted into one display currency; spending by category and by month; search, filter, sort.
 - **Multi-currency** — AMD, USD and RUB with daily rates from the Central Bank of Russia.
 - **Budgets** per category or overall, with a Telegram alert at 90%.
@@ -75,7 +75,8 @@ flowchart LR
 - **Thin endpoints, testable services.** Business rules live in application services that return `Result<T>` instead of throwing; endpoints map results to HTTP, and errors are returned as RFC 9457 problem details. Services are unit-tested directly against SQLite, without HTTP.
 - **Development login is Development-only.** For local work the API also accepts `X-Dev-User-Id`, but only when `ASPNETCORE_ENVIRONMENT=Development`, and Release builds of the client never send it. A test starts the API as Production and checks that the header is ignored.
 - **Cross-currency totals are converted, never summed raw.** The summary endpoint converts every transaction into the requested display currency using the latest stored rates (with clearly flagged fallback rates if none are stored yet).
-- **The bot is stateless.** One handler serves every chat, so the transaction type and amount travel inside the button's `callback_data` (`tx:i:1500`). The confirmation message is edited after recording, so a second tap can't create a duplicate.
+- **The bot is stateless.** One handler serves every chat, so type, amount, currency and category travel inside the button's `callback_data` (`tx:e:1500:AMD:12`, at most 64 bytes). The note doesn't fit, so the bot's question is sent as a reply to the user's message and the handler re-parses the note from `reply_to_message`. The confirmation message is edited after recording, so a second tap can't create a duplicate.
+- **Free-form input is a pure function.** `BotEntryParser` (regex: amount first or last, sign, currency symbol or word, `к`/`тыс` multiplier) and `CategoryGuesser` (same note before → category name in the note → keywords) have no I/O and are covered by table-driven tests.
 - **Notifications are idempotent.** Every sent reminder, weekly report and budget alert is recorded in `NotificationLogs` with a unique `(UserId, Kind, Key)` index. The Worker checks it before sending, so restarts never resend a message, and only transient Telegram failures (network, 5xx, 429) are retried.
 - **One SQLite file, two processes.** The API and the Worker share the database. Relative paths are resolved against the repository root so both open the same file, and both apply migrations at startup under EF Core's migration lock.
 
@@ -132,7 +133,7 @@ The API listens on `http://localhost:8080` and the Worker runs the bot; both use
 4. Deploy the client (the `Deploy` workflow publishes it to GitHub Pages) and register that URL with @BotFather (`/newapp` or the bot's menu button).
 5. Send `/start` to the bot.
 
-Bot commands: `/start`, `/menu`, `/expenses` (open the app), `/report` (last 7 days), or just send an amount.
+Bot commands: `/start`, `/menu`, `/expenses` (open the app), `/report` (last 7 days), or just send an amount with an optional note (`1500 кофе`, `+50000 зарплата`, `20$ такси`).
 
 ## Tests
 
