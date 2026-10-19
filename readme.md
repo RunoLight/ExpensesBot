@@ -178,6 +178,14 @@ In Development the OpenAPI document is served at `/openapi/v1.json`.
 - [ ] Move to PostgreSQL for multi-instance deployments
 - [x] Editing budgets, goals and tags
 - [x] Tag filters
+- [ ] Voice input — send a voice message like «потратил три тысячи на продукты»; speech-to-text, then the same parser as typed entries
+- [ ] Idempotent transaction creation — an `Idempotency-Key` header so a double tap or a network retry never creates a duplicate
+- [ ] Outbox for notifications — the API and the Worker write events to a table; a separate dispatcher delivers them to Telegram with retries
+- [ ] Observability — OpenTelemetry traces and metrics, structured logging with Serilog, `/health` checking the database and Telegram (possibly via .NET Aspire)
+- [ ] Rate limiting (`AddRateLimiter`) for the API and the bot
+- [ ] API versioning and Scalar UI instead of the bare `/openapi/v1.json`
+- [ ] Public demo mode — a read-only user with generated data, so the app can be explored without Telegram
+- [ ] Screenshots / GIF of the bot and the Mini App in this README
 
 ## License
 
