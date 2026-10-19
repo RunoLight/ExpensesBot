@@ -15,12 +15,7 @@ builder.Services.AddScoped<TelegramService>();
 builder.Services.AddTransient<TelegramAuthHandler>();
 
 builder.Services
-    .AddHttpClient<ExpensesApiClient>(client =>
-    {
-        client.BaseAddress = new Uri(apiBaseUrl);
-        // The API version this client was written against (the API assumes 1.0 when it's missing).
-        client.DefaultRequestHeaders.Add("api-version", "1.0");
-    })
+    .AddHttpClient<ExpensesApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl))
     .AddHttpMessageHandler<TelegramAuthHandler>();
 
 await builder.Build().RunAsync();

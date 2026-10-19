@@ -25,9 +25,9 @@ public class RateLimitingTests(RateLimitedWebApplicationFactory factory) : IClas
         var client = factory.CreateClientForDevUser(300_001);
 
         for (var i = 0; i < RateLimitedWebApplicationFactory.TokenLimit; i++)
-            (await client.GetAsync("/api/categories")).StatusCode.Should().Be(HttpStatusCode.OK);
+            (await client.GetAsync("/api/v1/categories")).StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var limited = await client.GetAsync("/api/categories");
+        var limited = await client.GetAsync("/api/v1/categories");
 
         limited.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
         limited.Headers.RetryAfter.Should().NotBeNull();
@@ -40,11 +40,11 @@ public class RateLimitingTests(RateLimitedWebApplicationFactory factory) : IClas
     {
         var greedy = factory.CreateClientForDevUser(300_002);
         for (var i = 0; i <= RateLimitedWebApplicationFactory.TokenLimit; i++)
-            await greedy.GetAsync("/api/categories");
+            await greedy.GetAsync("/api/v1/categories");
 
         var other = factory.CreateClientForDevUser(300_003);
 
-        (await other.GetAsync("/api/categories")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await other.GetAsync("/api/v1/categories")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]

@@ -33,7 +33,7 @@ public class CategoriesEndpointsTests : IClassFixture<CustomWebApplicationFactor
         SetDevUserAuthentication(111222333);
         
         // Act
-        var response = await _client.GetAsync("/api/categories");
+        var response = await _client.GetAsync("/api/v1/categories");
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -47,7 +47,7 @@ public class CategoriesEndpointsTests : IClassFixture<CustomWebApplicationFactor
         var request = new { Name = "Food", Icon = "🍔" };
         
         // Act
-        var response = await _client.PostAsJsonAsync("/api/categories", request);
+        var response = await _client.PostAsJsonAsync("/api/v1/categories", request);
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -61,7 +61,7 @@ public class CategoriesEndpointsTests : IClassFixture<CustomWebApplicationFactor
         var request = new { Name = "", Icon = "🍔" };
         
         // Act
-        var response = await _client.PostAsJsonAsync("/api/categories", request);
+        var response = await _client.PostAsJsonAsync("/api/v1/categories", request);
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -75,10 +75,10 @@ public class CategoriesEndpointsTests : IClassFixture<CustomWebApplicationFactor
         
         // Create a category first
         var createRequest = new { Name = "To Archive", Icon = "📦" };
-        await _client.PostAsJsonAsync("/api/categories", createRequest);
+        await _client.PostAsJsonAsync("/api/v1/categories", createRequest);
         
         // Act - try to archive non-existent (should still return OK or NotFound)
-        var response = await _client.PostAsync("/api/categories/999999/archive", null);
+        var response = await _client.PostAsync("/api/v1/categories/999999/archive", null);
         
         // Assert
         response.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.NotFound);
@@ -109,7 +109,7 @@ public class BudgetsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         SetDevUserAuthentication(555666777);
         
         // Act
-        var response = await _client.GetAsync("/api/budgets");
+        var response = await _client.GetAsync("/api/v1/budgets");
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -130,7 +130,7 @@ public class BudgetsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         };
         
         // Act
-        var response = await _client.PostAsJsonAsync("/api/budgets", request);
+        var response = await _client.PostAsJsonAsync("/api/v1/budgets", request);
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -151,7 +151,7 @@ public class BudgetsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         };
         
         // Act
-        var response = await _client.PostAsJsonAsync("/api/budgets", request);
+        var response = await _client.PostAsJsonAsync("/api/v1/budgets", request);
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -182,7 +182,7 @@ public class GoalsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         SetDevUserAuthentication(888999000);
         
         // Act
-        var response = await _client.GetAsync("/api/goals");
+        var response = await _client.GetAsync("/api/v1/goals");
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -203,7 +203,7 @@ public class GoalsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         };
         
         // Act
-        var response = await _client.PostAsJsonAsync("/api/goals", request);
+        var response = await _client.PostAsJsonAsync("/api/v1/goals", request);
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -214,7 +214,7 @@ public class GoalsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
     {
         SetDevUserAuthentication(111000222);
 
-        var response = await _client.PostAsJsonAsync("/api/goals/999999/contribute", new { AmountMinor = 1000 });
+        var response = await _client.PostAsJsonAsync("/api/v1/goals/999999/contribute", new { AmountMinor = 1000 });
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -224,7 +224,7 @@ public class GoalsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
     {
         SetDevUserAuthentication(111000333);
 
-        var create = await _client.PostAsJsonAsync("/api/goals", new
+        var create = await _client.PostAsJsonAsync("/api/v1/goals", new
         {
             Name = "Отпуск",
             TargetAmountMinor = 1_000_000,
@@ -236,12 +236,12 @@ public class GoalsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         goal!.CategoryId.Should().NotBeNull("a goal without a category gets its own one");
 
         // Salary is income too, but it was not put towards the goal.
-        await _client.PostAsJsonAsync("/api/transactions", new { AmountMinor = 5_000_000, Currency = "AMD", Type = 1 });
+        await _client.PostAsJsonAsync("/api/v1/transactions", new { AmountMinor = 5_000_000, Currency = "AMD", Type = 1 });
 
-        var contribute = await _client.PostAsJsonAsync($"/api/goals/{goal.Id}/contribute", new { AmountMinor = 250_000 });
+        var contribute = await _client.PostAsJsonAsync($"/api/v1/goals/{goal.Id}/contribute", new { AmountMinor = 250_000 });
         contribute.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var goals = await _client.GetFromJsonAsync<List<GoalResponse>>("/api/goals");
+        var goals = await _client.GetFromJsonAsync<List<GoalResponse>>("/api/v1/goals");
         var reloaded = goals!.Single(g => g.Id == goal.Id);
 
         reloaded.SavedAmountMinor.Should().Be(250_000);
@@ -254,7 +254,7 @@ public class GoalsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
     public async Task ContributeToGoal_NonPositiveAmount_ReturnsBadRequest(long amountMinor)
     {
         SetDevUserAuthentication(111000444);
-        var create = await _client.PostAsJsonAsync("/api/goals", new
+        var create = await _client.PostAsJsonAsync("/api/v1/goals", new
         {
             Name = "Телефон",
             TargetAmountMinor = 100_000,
@@ -262,7 +262,7 @@ public class GoalsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         });
         var goal = await create.Content.ReadFromJsonAsync<GoalResponse>();
 
-        var response = await _client.PostAsJsonAsync($"/api/goals/{goal!.Id}/contribute", new { AmountMinor = amountMinor });
+        var response = await _client.PostAsJsonAsync($"/api/v1/goals/{goal!.Id}/contribute", new { AmountMinor = amountMinor });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -271,10 +271,10 @@ public class GoalsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
     public async Task CreateGoal_WithAnotherUsersCategory_ReturnsBadRequest()
     {
         SetDevUserAuthentication(111000555);
-        var foreignCategories = await _client.GetFromJsonAsync<List<CategoryResponse>>("/api/categories");
+        var foreignCategories = await _client.GetFromJsonAsync<List<CategoryResponse>>("/api/v1/categories");
 
         SetDevUserAuthentication(111000666);
-        var response = await _client.PostAsJsonAsync("/api/goals", new
+        var response = await _client.PostAsJsonAsync("/api/v1/goals", new
         {
             Name = "Чужая категория",
             TargetAmountMinor = 100_000,
@@ -310,7 +310,7 @@ public class TagsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         SetDevUserAuthentication(222111333);
         
         // Act
-        var response = await _client.GetAsync("/api/tags");
+        var response = await _client.GetAsync("/api/v1/tags");
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -324,7 +324,7 @@ public class TagsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         var request = new { Name = $"Tag_{Guid.NewGuid()}", Color = "#FF6384" };
         
         // Act
-        var response = await _client.PostAsJsonAsync("/api/tags", request);
+        var response = await _client.PostAsJsonAsync("/api/v1/tags", request);
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -338,7 +338,7 @@ public class TagsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         var request = new { Name = "", Color = "#FF6384" };
         
         // Act
-        var response = await _client.PostAsJsonAsync("/api/tags", request);
+        var response = await _client.PostAsJsonAsync("/api/v1/tags", request);
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -369,7 +369,7 @@ public class ProfileEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         SetDevUserAuthentication(555444666);
         
         // Act
-        var response = await _client.GetAsync("/api/profile");
+        var response = await _client.GetAsync("/api/v1/profile");
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -383,7 +383,7 @@ public class ProfileEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         var request = new { Currency = "USD" };
         
         // Act
-        var response = await _client.PutAsJsonAsync("/api/profile/currency", request);
+        var response = await _client.PutAsJsonAsync("/api/v1/profile/currency", request);
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -397,7 +397,7 @@ public class ProfileEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         var request = new { Currency = "EUR" };
         
         // Act
-        var response = await _client.PutAsJsonAsync("/api/profile/currency", request);
+        var response = await _client.PutAsJsonAsync("/api/v1/profile/currency", request);
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -410,7 +410,7 @@ public class ProfileEndpointsTests : IClassFixture<CustomWebApplicationFactory>
         SetDevUserAuthentication(888777999);
         
         // Act
-        var response = await _client.DeleteAsync("/api/profile");
+        var response = await _client.DeleteAsync("/api/v1/profile");
         
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);

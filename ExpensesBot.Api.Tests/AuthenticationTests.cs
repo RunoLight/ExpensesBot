@@ -20,7 +20,7 @@ public class AuthenticationTests(ProductionWebApplicationFactory factory)
     [Fact]
     public async Task NoCredentials_ReturnsUnauthorized()
     {
-        var response = await factory.CreateClient().GetAsync("/api/profile");
+        var response = await factory.CreateClient().GetAsync("/api/v1/profile");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -31,7 +31,7 @@ public class AuthenticationTests(ProductionWebApplicationFactory factory)
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Dev-User-Id", "42");
 
-        var response = await client.GetAsync("/api/profile");
+        var response = await client.GetAsync("/api/v1/profile");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -42,7 +42,7 @@ public class AuthenticationTests(ProductionWebApplicationFactory factory)
         var client = ClientWithInitData(
             TelegramInitData.Create(CustomWebApplicationFactory.BotToken, 700_001, "Анна"));
 
-        var profile = await client.GetFromJsonAsync<UserProfileResponse>("/api/profile");
+        var profile = await client.GetFromJsonAsync<UserProfileResponse>("/api/v1/profile");
 
         profile!.DisplayName.Should().Be("Анна");
         profile.DefaultCurrency.Should().Be("AMD");
@@ -55,7 +55,7 @@ public class AuthenticationTests(ProductionWebApplicationFactory factory)
         var client = ClientWithInitData(
             TelegramInitData.Create("999:another-bot-token", 700_002));
 
-        var response = await client.GetAsync("/api/profile");
+        var response = await client.GetAsync("/api/v1/profile");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -66,7 +66,7 @@ public class AuthenticationTests(ProductionWebApplicationFactory factory)
         var initData = TelegramInitData.Create(CustomWebApplicationFactory.BotToken, 700_003)
             .Replace("700003", "700004");
 
-        var response = await ClientWithInitData(initData).GetAsync("/api/profile");
+        var response = await ClientWithInitData(initData).GetAsync("/api/v1/profile");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -77,7 +77,7 @@ public class AuthenticationTests(ProductionWebApplicationFactory factory)
         var initData = TelegramInitData.Create(
             CustomWebApplicationFactory.BotToken, 700_005, authDate: DateTimeOffset.UtcNow.AddDays(-3));
 
-        var response = await ClientWithInitData(initData).GetAsync("/api/profile");
+        var response = await ClientWithInitData(initData).GetAsync("/api/v1/profile");
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }

@@ -10,7 +10,7 @@ public static class CategoriesEndpoints
 {
     public static IEndpointRouteBuilder MapCategoriesEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/categories")
+        var group = app.MapGroup("/categories")
             .WithTags("Categories")
             .RequireAuthorization();
 
@@ -18,7 +18,7 @@ public static class CategoriesEndpoints
             service.GetAllAsync(user.GetUserId(), ct));
 
         group.MapPost("/", async (CreateCategoryRequest request, ClaimsPrincipal user, CategoryService service, CancellationToken ct) =>
-            (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(c => $"/api/categories/{c.Id}"));
+            (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(c => $"/api/v1/categories/{c.Id}"));
 
         group.MapPut("/{id:long}", async (long id, UpdateCategoryRequest request, ClaimsPrincipal user, CategoryService service, CancellationToken ct) =>
             (await service.UpdateAsync(user.GetUserId(), id, request, ct)).ToOk());

@@ -6,15 +6,13 @@ using Scalar.AspNetCore;
 namespace ExpensesBot.Api.Common;
 
 /// <summary>
-/// API versioning and its documentation. The version is read from the
-/// <c>api-version</c> header or query parameter; a request without one is served
-/// as 1.0, so clients released before versioning keep working. Every version gets
-/// its own OpenAPI document (<c>/openapi/v1.json</c>) and a Scalar UI at <c>/scalar</c>.
+/// API versioning and its documentation. The version is part of the URL
+/// (<c>/api/v1/transactions</c>), so it is visible in logs, links and caches.
+/// Every version gets its own OpenAPI document (<c>/openapi/v1.json</c>) and the
+/// Scalar UI at <c>/scalar</c>.
 /// </summary>
 public static class ApiDocumentation
 {
-    public const string VersionParameter = "api-version";
-
     public static readonly ApiVersion V1 = new(1, 0);
 
     public static IServiceCollection AddVersionedApi(this IServiceCollection services)
@@ -23,16 +21,13 @@ public static class ApiDocumentation
             .AddApiVersioning(options =>
             {
                 options.DefaultApiVersion = V1;
-                options.AssumeDefaultVersionWhenUnspecified = true;
                 options.ReportApiVersions = true; // api-supported-versions response header
-                options.ApiVersionReader = ApiVersionReader.Combine(
-                    new HeaderApiVersionReader(VersionParameter),
-                    new QueryStringApiVersionReader(VersionParameter));
+                options.ApiVersionReader = new UrlSegmentApiVersionReader();
             })
             .AddApiExplorer(options =>
             {
                 options.GroupNameFormat = "'v'V"; // document names: v1, v2…
-                options.SubstituteApiVersionInUrl = true;
+                options.SubstituteApiVersionInUrl = true; // documents show /api/v1/…, not /api/v{version}/…
             })
             .AddOpenApi();
 
@@ -41,9 +36,9 @@ public static class ApiDocumentation
         return services;
     }
 
-    /// <summary>All versioned endpoints are mapped into this group.</summary>
+    /// <summary>All versioned endpoints are mapped into this group: <c>/api/v1/…</c>.</summary>
     public static RouteGroupBuilder MapVersionedApi(this WebApplication app) =>
-        app.NewVersionedApi("ExpensesBot").MapGroup("").HasApiVersion(V1);
+        app.NewVersionedApi("ExpensesBot").MapGroup("/api/v{version:apiVersion}").HasApiVersion(V1);
 
     public static WebApplication MapApiDocumentation(this WebApplication app)
     {

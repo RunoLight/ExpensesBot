@@ -82,10 +82,10 @@ flowchart LR
 - **The bot is stateless.** One handler serves every chat, so type, amount, currency and category travel inside the button's `callback_data` (`tx:e:1500:AMD:12`, at most 64 bytes). The note doesn't fit, so the bot's question is sent as a reply to the user's message and the handler re-parses the note from `reply_to_message`. The confirmation message is edited after recording, so a second tap can't create a duplicate.
 - **Free-form input is a pure function.** `BotEntryParser` (regex: amount first or last, sign, currency symbol or word, `к`/`тыс` multiplier) and `CategoryGuesser` (same note before → category name in the note → keywords) have no I/O and are covered by table-driven tests.
 - **Resource-level authorization for shared wallets.** Authentication says who the user is; `WalletService` decides per wallet: non-members get 404 (existence isn't revealed), members can read and record, only the owner may rename, re-key the invite, remove members or delete (403). A transaction keeps its author as owner, so personal statistics and edit rights don't change; leaving or deleting a wallet turns its transactions back into personal ones (`ON DELETE SET NULL`). Joining is shared by the API and the bot (`WalletInvites` in the Data project).
-- **Creating a transaction is idempotent.** `POST /api/transactions` accepts an `Idempotency-Key` header. The key is stored on the transaction under a unique `(UserId, IdempotencyKey)` index: a repeated request returns the original transaction, a concurrent duplicate loses the race on the index and gets the same answer, and reusing a key for a different amount, currency, type, category or wallet is rejected with 422. The Mini App generates one key per form, so a double tap or a network retry can't record the same entry twice.
+- **Creating a transaction is idempotent.** `POST /api/v1/transactions` accepts an `Idempotency-Key` header. The key is stored on the transaction under a unique `(UserId, IdempotencyKey)` index: a repeated request returns the original transaction, a concurrent duplicate loses the race on the index and gets the same answer, and reusing a key for a different amount, currency, type, category or wallet is rejected with 422. The Mini App generates one key per form, so a double tap or a network retry can't record the same entry twice.
 - **Notifications go through a transactional outbox.** Nobody calls Telegram in the middle of business logic: the API and the Worker add an `OutboxMessages` row in the same `SaveChanges` as the change it is about (a wallet transaction, a reminder's `NotificationLogs` entry), so a message exists if and only if that change was committed. `OutboxDispatcher`, a separate hosted service in the Worker, delivers due messages, records each outcome right after sending, retries transient failures (network, 5xx, 429 with Telegram's `retry_after`) with exponential backoff up to 8 attempts, and drops permanent ones (bot blocked). A slow Telegram therefore never blocks the bot or an API request.
 - **Scheduled notifications are queued once.** Every reminder, weekly report and budget alert is recorded in `NotificationLogs` with a unique `(UserId, Kind, Key)` index, together with its outbox message. The Worker checks it before queueing, so restarts or a second instance never queue the same message twice.
-- **Versioned API without breaking old clients.** Endpoints are mapped into an `Asp.Versioning` version set. The version travels in a header (or query parameter) rather than the path, and a missing version means 1.0, so a Mini App cached in someone's Telegram keeps working after a v2 ships. `Asp.Versioning.OpenApi` produces one OpenAPI document per version, and a document transformer declares both authentication schemes so Scalar can send authorised requests.
+- **Versioned API.** Endpoints are mapped into an `Asp.Versioning` version set under `/api/v{version}` (`/api/v1/transactions`), so the version is visible in logs, links and caches, and a future v2 can live next to v1. Responses list `api-supported-versions`; an unknown version gets 404. `Asp.Versioning.OpenApi` produces one OpenAPI document per version, and a document transformer declares both authentication schemes so Scalar can send authorised requests.
 - **Rate limiting on both entry points.** The API uses ASP.NET Core's `AddRateLimiter` with one token bucket per user (per IP before authentication): a burst of 60 requests, because opening the Mini App fires about ten at once, refilled at 120 per minute. Over the limit it answers 429 with `Retry-After` and a problem-details body; health probes are exempt. The bot has its own per-user bucket (burst 10, 30 updates per minute): extra updates are dropped, pressed buttons are still answered so their spinner stops, and the user is told to slow down at most once a minute.
 - **Observability through OpenTelemetry.** Both services log through Serilog (readable lines in Development, compact JSON elsewhere) and export traces, metrics and logs over OTLP whenever `OTEL_EXPORTER_OTLP_ENDPOINT` is set, so any OpenTelemetry backend works and the Aspire dashboard works with no extra setup. Traces cover incoming requests, EF Core queries and outgoing HTTP; the Worker, which has no incoming requests, opens its own spans per bot update, maintenance run and outbox delivery. Custom metrics: `expensesbot.transactions.created` (by source: api, bot, recurring), `expensesbot.outbox.attempts` (by kind and outcome), `expensesbot.bot.updates`. Telegram URLs carry the bot token, so the HTTP instrumentation records them with the token masked.
 - **Health checks that mean something.** `/health` returns a JSON report for the database (EF Core) and the Telegram Bot API (`getMe`, cached for a minute). Telegram being down makes the API *Degraded*, not *Unhealthy*: the Mini App keeps working, because `initData` is verified offline. `/alive` is a dependency-free liveness probe.
@@ -173,21 +173,21 @@ GitHub Actions runs build and tests on every push and pull request (`.github/wor
 
 | Method | Route | Purpose |
 |---|---|---|
-| GET/POST/PUT/DELETE | `/api/transactions[/{id}]` | Transactions (paged list with optional `tagId` filter, create with optional `Idempotency-Key`, update, delete) |
-| POST | `/api/transactions/bulk` | Create up to 100 transactions, with per-row errors |
-| GET | `/api/transactions/summary?mode=all\|30days\|month&currency=AMD` | Totals, breakdowns, average and projection |
-| GET | `/api/transactions/export` | CSV export |
-| GET/POST/PUT/DELETE | `/api/categories[/{id}]`, `POST /{id}/archive` | Categories |
-| GET/POST/PUT/DELETE | `/api/budgets[/{id}]` | Budgets with spent amount and progress |
-| GET/POST/PUT/DELETE | `/api/goals[/{id}]`, `POST /{id}/contribute` | Savings goals |
-| GET/POST/PUT/DELETE | `/api/recurring[/{id}]`, `POST /{id}/execute` | Recurring rules |
-| GET/POST/PUT/DELETE | `/api/tags[/{id}]` | Tags |
-| GET/PUT/DELETE | `/api/profile`, `/api/profile/currency` | Profile, default currency, account deletion |
-| GET/POST | `/api/exchange/rates`, `/api/exchange/convert` | Exchange rates |
-| GET/POST/PUT/DELETE | `/api/wallets[/{id}]`, `POST /join`, `POST /{id}/invite`, `POST /{id}/leave`, `DELETE /{id}/members/{userId}` | Shared wallets and membership |
-| GET | `/api/wallets/{id}/transactions`, `/api/wallets/{id}/summary` | Wallet transactions with authors; totals per member and category |
+| GET/POST/PUT/DELETE | `/api/v1/transactions[/{id}]` | Transactions (paged list with optional `tagId` filter, create with optional `Idempotency-Key`, update, delete) |
+| POST | `/api/v1/transactions/bulk` | Create up to 100 transactions, with per-row errors |
+| GET | `/api/v1/transactions/summary?mode=all\|30days\|month&currency=AMD` | Totals, breakdowns, average and projection |
+| GET | `/api/v1/transactions/export` | CSV export |
+| GET/POST/PUT/DELETE | `/api/v1/categories[/{id}]`, `POST /{id}/archive` | Categories |
+| GET/POST/PUT/DELETE | `/api/v1/budgets[/{id}]` | Budgets with spent amount and progress |
+| GET/POST/PUT/DELETE | `/api/v1/goals[/{id}]`, `POST /{id}/contribute` | Savings goals |
+| GET/POST/PUT/DELETE | `/api/v1/recurring[/{id}]`, `POST /{id}/execute` | Recurring rules |
+| GET/POST/PUT/DELETE | `/api/v1/tags[/{id}]` | Tags |
+| GET/PUT/DELETE | `/api/v1/profile`, `/api/v1/profile/currency` | Profile, default currency, account deletion |
+| GET/POST | `/api/v1/exchange/rates`, `/api/v1/exchange/convert` | Exchange rates |
+| GET/POST/PUT/DELETE | `/api/v1/wallets[/{id}]`, `POST /join`, `POST /{id}/invite`, `POST /{id}/leave`, `DELETE /{id}/members/{userId}` | Shared wallets and membership |
+| GET | `/api/v1/wallets/{id}/transactions`, `/api/v1/wallets/{id}/summary` | Wallet transactions with authors; totals per member and category |
 
-The version is chosen with the `api-version` header or query parameter (`api-version: 1.0`); without it the API serves 1.0, so clients built before versioning keep working, and every response lists `api-supported-versions`. In Development the OpenAPI document is served per version at `/openapi/v1.json` and the [Scalar](https://scalar.com) UI at `/scalar` (choose the `DevUser` scheme and enter any id to try requests). `/health` (JSON report: database, Telegram) and `/alive` are public and unversioned.
+Every route is versioned in the path (`/api/v1/…`). In Development the OpenAPI document is served per version at `/openapi/v1.json` and the [Scalar](https://scalar.com) UI at `/scalar` (choose the `DevUser` scheme and enter any id to try requests). `/health` (JSON report: database, Telegram) and `/alive` are public and unversioned.
 
 ## Roadmap
 

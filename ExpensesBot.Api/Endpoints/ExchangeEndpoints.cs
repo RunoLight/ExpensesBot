@@ -10,7 +10,7 @@ public static class ExchangeEndpoints
     public static IEndpointRouteBuilder MapExchangeEndpoints(
         this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/exchange")
+        var group = app.MapGroup("/exchange")
             .WithTags("Exchange");
 
         group.MapGet("/rates", GetRatesAsync);

@@ -10,7 +10,7 @@ public static class BudgetsEndpoints
 {
     public static IEndpointRouteBuilder MapBudgetsEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/budgets")
+        var group = app.MapGroup("/budgets")
             .WithTags("Budgets")
             .RequireAuthorization();
 
@@ -18,7 +18,7 @@ public static class BudgetsEndpoints
             service.GetActiveAsync(user.GetUserId(), ct));
 
         group.MapPost("/", async (CreateBudgetRequest request, ClaimsPrincipal user, BudgetService service, CancellationToken ct) =>
-            (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(b => $"/api/budgets/{b.Id}"));
+            (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(b => $"/api/v1/budgets/{b.Id}"));
 
         group.MapPut("/{id:long}", async (long id, UpdateBudgetRequest request, ClaimsPrincipal user, BudgetService service, CancellationToken ct) =>
             (await service.UpdateAsync(user.GetUserId(), id, request, ct)).ToOk());

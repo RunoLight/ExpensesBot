@@ -10,7 +10,7 @@ public static class RecurringTransactionsEndpoints
 {
     public static IEndpointRouteBuilder MapRecurringTransactionsEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/recurring")
+        var group = app.MapGroup("/recurring")
             .WithTags("RecurringTransactions")
             .RequireAuthorization();
 
@@ -18,7 +18,7 @@ public static class RecurringTransactionsEndpoints
             service.GetAllAsync(user.GetUserId(), ct));
 
         group.MapPost("/", async (CreateRecurringTransactionRequest request, ClaimsPrincipal user, RecurringTransactionService service, CancellationToken ct) =>
-            (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(r => $"/api/recurring/{r.Id}"));
+            (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(r => $"/api/v1/recurring/{r.Id}"));
 
         group.MapPut("/{id:long}", async (long id, UpdateRecurringTransactionRequest request, ClaimsPrincipal user, RecurringTransactionService service, CancellationToken ct) =>
             (await service.UpdateAsync(user.GetUserId(), id, request, ct)).ToOk());

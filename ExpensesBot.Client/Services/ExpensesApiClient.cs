@@ -12,21 +12,21 @@ public sealed class ExpensesApiClient(HttpClient http)
     // Categories
 
     public async Task<List<CategoryDto>> GetCategoriesAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<CategoryDto>>("api/categories", ct) ?? [];
+        await http.GetFromJsonAsync<List<CategoryDto>>("api/v1/categories", ct) ?? [];
 
     public Task<CategoryDto> CreateCategoryAsync(string name, string? icon = null, CancellationToken ct = default) =>
-        SendAsync<CategoryDto>(HttpMethod.Post, "api/categories", new { Name = name, Icon = icon }, ct);
+        SendAsync<CategoryDto>(HttpMethod.Post, "api/v1/categories", new { Name = name, Icon = icon }, ct);
 
     public Task DeleteCategoryAsync(long id, CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Delete, $"api/categories/{id}", null, ct);
+        SendAsync(HttpMethod.Delete, $"api/v1/categories/{id}", null, ct);
 
     public Task<CategoryDto> ArchiveCategoryAsync(long id, CancellationToken ct = default) =>
-        SendAsync<CategoryDto>(HttpMethod.Post, $"api/categories/{id}/archive", null, ct);
+        SendAsync<CategoryDto>(HttpMethod.Post, $"api/v1/categories/{id}/archive", null, ct);
 
     // Transactions
 
     public async Task<List<TransactionDto>> GetTransactionsAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<TransactionDto>>("api/transactions?limit=50&offset=0", ct) ?? [];
+        await http.GetFromJsonAsync<List<TransactionDto>>("api/v1/transactions?limit=50&offset=0", ct) ?? [];
 
     public Task<TransactionDto> CreateTransactionAsync(
         long amountMinor,
@@ -38,7 +38,7 @@ public sealed class ExpensesApiClient(HttpClient http)
         long? walletId = null,
         string? idempotencyKey = null,
         CancellationToken ct = default) =>
-        SendAsync<TransactionDto>(HttpMethod.Post, "api/transactions", new
+        SendAsync<TransactionDto>(HttpMethod.Post, "api/v1/transactions", new
         {
             AmountMinor = amountMinor,
             Currency = currency,
@@ -58,7 +58,7 @@ public sealed class ExpensesApiClient(HttpClient http)
         string? note,
         TransactionType? type = null,
         CancellationToken ct = default) =>
-        SendAsync<TransactionDto>(HttpMethod.Put, $"api/transactions/{id}", new
+        SendAsync<TransactionDto>(HttpMethod.Put, $"api/v1/transactions/{id}", new
         {
             AmountMinor = amountMinor,
             Currency = currency,
@@ -68,12 +68,12 @@ public sealed class ExpensesApiClient(HttpClient http)
         }, ct);
 
     public Task DeleteTransactionAsync(long id, CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Delete, $"api/transactions/{id}", null, ct);
+        SendAsync(HttpMethod.Delete, $"api/v1/transactions/{id}", null, ct);
 
     public Task<BulkCreateResponse> BulkCreateTransactionsAsync(
         IReadOnlyList<BulkTransactionRequest> requests,
         CancellationToken ct = default) =>
-        SendAsync<BulkCreateResponse>(HttpMethod.Post, "api/transactions/bulk", requests, ct);
+        SendAsync<BulkCreateResponse>(HttpMethod.Post, "api/v1/transactions/bulk", requests, ct);
 
     /// <param name="mode">"all", "30days" or "month".</param>
     /// <param name="currency">Currency all totals are converted into.</param>
@@ -82,17 +82,17 @@ public sealed class ExpensesApiClient(HttpClient http)
         string currency,
         CancellationToken ct = default)
     {
-        var url = $"api/transactions/summary?mode={Uri.EscapeDataString(mode)}&currency={Uri.EscapeDataString(currency)}";
+        var url = $"api/v1/transactions/summary?mode={Uri.EscapeDataString(mode)}&currency={Uri.EscapeDataString(currency)}";
         return await http.GetFromJsonAsync<UserSummaryDto>(url, ct) ?? UserSummaryDto.Empty(currency);
     }
 
     public Task<byte[]> ExportCsvAsync(CancellationToken ct = default) =>
-        http.GetByteArrayAsync("api/transactions/export", ct);
+        http.GetByteArrayAsync("api/v1/transactions/export", ct);
 
     // Recurring transactions
 
     public async Task<List<RecurringTransactionDto>> GetRecurringTransactionsAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<RecurringTransactionDto>>("api/recurring", ct) ?? [];
+        await http.GetFromJsonAsync<List<RecurringTransactionDto>>("api/v1/recurring", ct) ?? [];
 
     public Task<RecurringTransactionDto> CreateRecurringTransactionAsync(
         long amountMinor,
@@ -102,7 +102,7 @@ public sealed class ExpensesApiClient(HttpClient http)
         string pattern,
         TransactionType type,
         CancellationToken ct = default) =>
-        SendAsync<RecurringTransactionDto>(HttpMethod.Post, "api/recurring", new
+        SendAsync<RecurringTransactionDto>(HttpMethod.Post, "api/v1/recurring", new
         {
             AmountMinor = amountMinor,
             Currency = currency,
@@ -113,15 +113,15 @@ public sealed class ExpensesApiClient(HttpClient http)
         }, ct);
 
     public Task ExecuteRecurringTransactionAsync(long id, CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Post, $"api/recurring/{id}/execute", null, ct);
+        SendAsync(HttpMethod.Post, $"api/v1/recurring/{id}/execute", null, ct);
 
     public Task DeleteRecurringTransactionAsync(long id, CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Delete, $"api/recurring/{id}", null, ct);
+        SendAsync(HttpMethod.Delete, $"api/v1/recurring/{id}", null, ct);
 
     // Budgets
 
     public async Task<List<BudgetDto>> GetBudgetsAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<BudgetDto>>("api/budgets", ct) ?? [];
+        await http.GetFromJsonAsync<List<BudgetDto>>("api/v1/budgets", ct) ?? [];
 
     public Task<BudgetDto> CreateBudgetAsync(
         long amountMinor,
@@ -130,7 +130,7 @@ public sealed class ExpensesApiClient(HttpClient http)
         DateTime startDateUtc,
         DateTime endDateUtc,
         CancellationToken ct = default) =>
-        SendAsync<BudgetDto>(HttpMethod.Post, "api/budgets", new
+        SendAsync<BudgetDto>(HttpMethod.Post, "api/v1/budgets", new
         {
             AmountMinor = amountMinor,
             Currency = currency,
@@ -147,7 +147,7 @@ public sealed class ExpensesApiClient(HttpClient http)
         DateTime startDateUtc,
         DateTime endDateUtc,
         CancellationToken ct = default) =>
-        SendAsync<BudgetDto>(HttpMethod.Put, $"api/budgets/{id}", new
+        SendAsync<BudgetDto>(HttpMethod.Put, $"api/v1/budgets/{id}", new
         {
             AmountMinor = amountMinor,
             Currency = currency,
@@ -157,29 +157,29 @@ public sealed class ExpensesApiClient(HttpClient http)
         }, ct);
 
     public Task DeleteBudgetAsync(long id, CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Delete, $"api/budgets/{id}", null, ct);
+        SendAsync(HttpMethod.Delete, $"api/v1/budgets/{id}", null, ct);
 
     // Exchange rates
 
     public async Task<List<ExchangeRateDto>> GetExchangeRatesAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<ExchangeRateDto>>("api/exchange/rates", ct) ?? [];
+        await http.GetFromJsonAsync<List<ExchangeRateDto>>("api/v1/exchange/rates", ct) ?? [];
 
     // Profile
 
     public async Task<UserProfileDto> GetProfileAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<UserProfileDto>("api/profile", ct)
+        await http.GetFromJsonAsync<UserProfileDto>("api/v1/profile", ct)
         ?? throw new InvalidOperationException("API returned an empty response.");
 
     public Task SetDefaultCurrencyAsync(string currency, CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Put, "api/profile/currency", new { Currency = currency }, ct);
+        SendAsync(HttpMethod.Put, "api/v1/profile/currency", new { Currency = currency }, ct);
 
     public Task DeleteAccountAsync(CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Delete, "api/profile", null, ct);
+        SendAsync(HttpMethod.Delete, "api/v1/profile", null, ct);
 
     // Goals
 
     public async Task<List<GoalDto>> GetGoalsAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<GoalDto>>("api/goals", ct) ?? [];
+        await http.GetFromJsonAsync<List<GoalDto>>("api/v1/goals", ct) ?? [];
 
     public Task<GoalDto> CreateGoalAsync(
         string name,
@@ -188,7 +188,7 @@ public sealed class ExpensesApiClient(HttpClient http)
         long? categoryId,
         DateTime? targetDateUtc,
         CancellationToken ct = default) =>
-        SendAsync<GoalDto>(HttpMethod.Post, "api/goals", new
+        SendAsync<GoalDto>(HttpMethod.Post, "api/v1/goals", new
         {
             Name = name,
             TargetAmountMinor = targetAmountMinor,
@@ -203,7 +203,7 @@ public sealed class ExpensesApiClient(HttpClient http)
         long targetAmountMinor,
         DateTime? targetDateUtc,
         CancellationToken ct = default) =>
-        SendAsync<GoalDto>(HttpMethod.Put, $"api/goals/{id}", new
+        SendAsync<GoalDto>(HttpMethod.Put, $"api/v1/goals/{id}", new
         {
             Name = name,
             TargetAmountMinor = targetAmountMinor,
@@ -212,55 +212,55 @@ public sealed class ExpensesApiClient(HttpClient http)
         }, ct);
 
     public Task DeleteGoalAsync(long id, CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Delete, $"api/goals/{id}", null, ct);
+        SendAsync(HttpMethod.Delete, $"api/v1/goals/{id}", null, ct);
 
     public Task ContributeToGoalAsync(long id, long amountMinor, CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Post, $"api/goals/{id}/contribute", new { AmountMinor = amountMinor }, ct);
+        SendAsync(HttpMethod.Post, $"api/v1/goals/{id}/contribute", new { AmountMinor = amountMinor }, ct);
 
     // Tags
 
     public async Task<List<TagDto>> GetTagsAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<TagDto>>("api/tags", ct) ?? [];
+        await http.GetFromJsonAsync<List<TagDto>>("api/v1/tags", ct) ?? [];
 
     public Task<TagDto> CreateTagAsync(string name, string color = "#36A2EB", CancellationToken ct = default) =>
-        SendAsync<TagDto>(HttpMethod.Post, "api/tags", new { Name = name, Color = color }, ct);
+        SendAsync<TagDto>(HttpMethod.Post, "api/v1/tags", new { Name = name, Color = color }, ct);
 
     public Task<TagDto> UpdateTagAsync(long id, string name, string color, CancellationToken ct = default) =>
-        SendAsync<TagDto>(HttpMethod.Put, $"api/tags/{id}", new { Name = name, Color = color }, ct);
+        SendAsync<TagDto>(HttpMethod.Put, $"api/v1/tags/{id}", new { Name = name, Color = color }, ct);
 
     public Task DeleteTagAsync(long id, CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Delete, $"api/tags/{id}", null, ct);
+        SendAsync(HttpMethod.Delete, $"api/v1/tags/{id}", null, ct);
 
     // Shared wallets
 
     public async Task<List<WalletDto>> GetWalletsAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<WalletDto>>("api/wallets", ct) ?? [];
+        await http.GetFromJsonAsync<List<WalletDto>>("api/v1/wallets", ct) ?? [];
 
     public Task<WalletDto> CreateWalletAsync(string name, CancellationToken ct = default) =>
-        SendAsync<WalletDto>(HttpMethod.Post, "api/wallets", new { Name = name }, ct);
+        SendAsync<WalletDto>(HttpMethod.Post, "api/v1/wallets", new { Name = name }, ct);
 
     public Task<WalletDto> JoinWalletAsync(string code, CancellationToken ct = default) =>
-        SendAsync<WalletDto>(HttpMethod.Post, "api/wallets/join", new { Code = code }, ct);
+        SendAsync<WalletDto>(HttpMethod.Post, "api/v1/wallets/join", new { Code = code }, ct);
 
     public Task<WalletDto> RegenerateWalletInviteAsync(long id, CancellationToken ct = default) =>
-        SendAsync<WalletDto>(HttpMethod.Post, $"api/wallets/{id}/invite", null, ct);
+        SendAsync<WalletDto>(HttpMethod.Post, $"api/v1/wallets/{id}/invite", null, ct);
 
     public Task LeaveWalletAsync(long id, CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Post, $"api/wallets/{id}/leave", null, ct);
+        SendAsync(HttpMethod.Post, $"api/v1/wallets/{id}/leave", null, ct);
 
     public Task DeleteWalletAsync(long id, CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Delete, $"api/wallets/{id}", null, ct);
+        SendAsync(HttpMethod.Delete, $"api/v1/wallets/{id}", null, ct);
 
     public Task RemoveWalletMemberAsync(long id, long memberUserId, CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Delete, $"api/wallets/{id}/members/{memberUserId}", null, ct);
+        SendAsync(HttpMethod.Delete, $"api/v1/wallets/{id}/members/{memberUserId}", null, ct);
 
     /// <summary>Members, this month's summary in <paramref name="currency"/> and the latest transactions.</summary>
     public async Task<WalletView> GetWalletViewAsync(long id, string currency, CancellationToken ct = default)
     {
-        var detailsTask = http.GetFromJsonAsync<WalletDetailsDto>($"api/wallets/{id}", ct);
+        var detailsTask = http.GetFromJsonAsync<WalletDetailsDto>($"api/v1/wallets/{id}", ct);
         var summaryTask = http.GetFromJsonAsync<WalletSummaryDto>(
-            $"api/wallets/{id}/summary?mode=month&currency={Uri.EscapeDataString(currency)}", ct);
-        var transactionsTask = http.GetFromJsonAsync<List<WalletTransactionDto>>($"api/wallets/{id}/transactions?limit=20", ct);
+            $"api/v1/wallets/{id}/summary?mode=month&currency={Uri.EscapeDataString(currency)}", ct);
+        var transactionsTask = http.GetFromJsonAsync<List<WalletTransactionDto>>($"api/v1/wallets/{id}/transactions?limit=20", ct);
 
         await Task.WhenAll(detailsTask, summaryTask, transactionsTask);
 

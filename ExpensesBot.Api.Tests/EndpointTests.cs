@@ -27,7 +27,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
 
     private static async Task<TransactionResponse> CreateAsync(HttpClient client, object request)
     {
-        var response = await client.PostAsJsonAsync("/api/transactions", request);
+        var response = await client.PostAsJsonAsync("/api/v1/transactions", request);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         return (await response.Content.ReadFromJsonAsync<TransactionResponse>())!;
     }
@@ -55,7 +55,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
     {
         var client = factory.CreateClientForDevUser(100_002);
 
-        var response = await client.PostAsJsonAsync("/api/transactions", Transaction(amountMinor, currency));
+        var response = await client.PostAsJsonAsync("/api/v1/transactions", Transaction(amountMinor, currency));
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -66,7 +66,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
         var client = factory.CreateClientForDevUser(100_003);
         var created = await CreateAsync(client, Transaction(1_000, note: "before"));
 
-        var response = await client.PutAsJsonAsync($"/api/transactions/{created.Id}", new
+        var response = await client.PutAsJsonAsync($"/api/v1/transactions/{created.Id}", new
         {
             AmountMinor = 2_500,
             Currency = "RUB",
@@ -77,7 +77,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var reloaded = await client.GetFromJsonAsync<TransactionResponse>($"/api/transactions/{created.Id}");
+        var reloaded = await client.GetFromJsonAsync<TransactionResponse>($"/api/v1/transactions/{created.Id}");
         reloaded!.AmountMinor.Should().Be(2_500);
         reloaded.Currency.Should().Be("RUB");
         reloaded.Note.Should().Be("after");
@@ -90,8 +90,8 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
         var client = factory.CreateClientForDevUser(100_004);
         var created = await CreateAsync(client, Transaction(3_000));
 
-        var delete = await client.DeleteAsync($"/api/transactions/{created.Id}");
-        var get = await client.GetAsync($"/api/transactions/{created.Id}");
+        var delete = await client.DeleteAsync($"/api/v1/transactions/{created.Id}");
+        var get = await client.GetAsync($"/api/v1/transactions/{created.Id}");
 
         delete.StatusCode.Should().Be(HttpStatusCode.NoContent);
         get.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -104,9 +104,9 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
         var stranger = factory.CreateClientForDevUser(100_006);
         var created = await CreateAsync(owner, Transaction(5_000));
 
-        (await stranger.GetAsync($"/api/transactions/{created.Id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
-        (await stranger.DeleteAsync($"/api/transactions/{created.Id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
-        (await owner.GetAsync($"/api/transactions/{created.Id}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await stranger.GetAsync($"/api/v1/transactions/{created.Id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await stranger.DeleteAsync($"/api/v1/transactions/{created.Id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await owner.GetAsync($"/api/v1/transactions/{created.Id}")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
     {
         var client = factory.CreateClientForDevUser(100_007);
 
-        var response = await client.PostAsJsonAsync("/api/transactions/bulk", new[]
+        var response = await client.PostAsJsonAsync("/api/v1/transactions/bulk", new[]
         {
             Transaction(1_000),
             Transaction(2_000, "EUR"),
@@ -136,7 +136,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
         var client = factory.CreateClientForDevUser(100_008);
         var requests = Enumerable.Range(0, 101).Select(_ => Transaction(1_000)).ToList();
 
-        var response = await client.PostAsJsonAsync("/api/transactions/bulk", requests);
+        var response = await client.PostAsJsonAsync("/api/v1/transactions/bulk", requests);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -150,7 +150,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
         await CreateAsync(client, Transaction(400_000, type: 1));  // 4 000 AMD income
 
         var summary = await client.GetFromJsonAsync<UserSummaryResponse>(
-            "/api/transactions/summary?mode=all&currency=AMD");
+            "/api/v1/transactions/summary?mode=all&currency=AMD");
 
         summary!.Currency.Should().Be("AMD");
         summary.TotalExpenseMinor.Should().Be(150_000);
@@ -177,9 +177,9 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
         await CreateAsync(client, Transaction(100_000, "AMD")); // 1 000 AMD
 
         var inAmd = await client.GetFromJsonAsync<UserSummaryResponse>(
-            "/api/transactions/summary?mode=all&currency=AMD");
+            "/api/v1/transactions/summary?mode=all&currency=AMD");
         var inUsd = await client.GetFromJsonAsync<UserSummaryResponse>(
-            "/api/transactions/summary?mode=all&currency=USD");
+            "/api/v1/transactions/summary?mode=all&currency=USD");
 
         inAmd!.TotalExpenseMinor.Should().Be(500_000);
         inUsd!.TotalExpenseMinor.Should().Be(1_250);
@@ -192,7 +192,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
         await CreateAsync(client, Transaction(300_000)); // 3 000 AMD today
 
         var summary = await client.GetFromJsonAsync<UserSummaryResponse>(
-            "/api/transactions/summary?mode=30days&currency=AMD");
+            "/api/v1/transactions/summary?mode=30days&currency=AMD");
 
         // 3 000 AMD over 30 days = 100 AMD/day = 10 000 minor units.
         summary!.AveragePerDay.Should().BeApproximately(10_000, 1);
@@ -205,7 +205,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
         var client = factory.CreateClientForDevUser(100_012);
         await CreateAsync(client, Transaction(12_345, note: "=HYPERLINK(\"x\")"));
 
-        var bytes = await client.GetByteArrayAsync("/api/transactions/export");
+        var bytes = await client.GetByteArrayAsync("/api/v1/transactions/export");
         var lines = Encoding.UTF8.GetString(bytes).TrimStart('﻿')
             .Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
@@ -221,7 +221,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
         await using var isolated = new CustomWebApplicationFactory();
         var client = isolated.CreateClient();
 
-        var rates = await client.GetFromJsonAsync<List<ExchangeRateResponse>>("/api/exchange/rates");
+        var rates = await client.GetFromJsonAsync<List<ExchangeRateResponse>>("/api/v1/exchange/rates");
 
         rates.Should().NotBeEmpty();
         rates!.Should().OnlyContain(r => r.IsFallback);
@@ -233,7 +233,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
     {
         var client = factory.CreateClientForDevUser(100_013);
 
-        var response = await client.PostAsJsonAsync("/api/transactions", Transaction(1_000, "EUR"));
+        var response = await client.PostAsJsonAsync("/api/v1/transactions", Transaction(1_000, "EUR"));
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         response.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
@@ -247,10 +247,10 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
     public async Task DeleteAccount_RemovesTheUsersData()
     {
         var client = factory.CreateClientForDevUser(100_014);
-        var profile = await client.GetFromJsonAsync<UserProfileResponse>("/api/profile");
+        var profile = await client.GetFromJsonAsync<UserProfileResponse>("/api/v1/profile");
         await CreateAsync(client, Transaction(5_000));
 
-        var response = await client.DeleteAsync("/api/profile");
+        var response = await client.DeleteAsync("/api/v1/profile");
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
@@ -263,7 +263,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
 
     private static Task<HttpResponseMessage> PostWithKeyAsync(HttpClient client, string key, object request)
     {
-        var message = new HttpRequestMessage(HttpMethod.Post, "/api/transactions") { Content = JsonContent.Create(request) };
+        var message = new HttpRequestMessage(HttpMethod.Post, "/api/v1/transactions") { Content = JsonContent.Create(request) };
         message.Headers.Add("Idempotency-Key", key);
         return client.SendAsync(message);
     }
@@ -283,7 +283,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
         var replayed = await retry.Content.ReadFromJsonAsync<TransactionResponse>();
         replayed!.Id.Should().Be(original!.Id);
 
-        var all = await client.GetFromJsonAsync<List<TransactionResponse>>("/api/transactions");
+        var all = await client.GetFromJsonAsync<List<TransactionResponse>>("/api/v1/transactions");
         all.Should().ContainSingle();
     }
 
@@ -297,7 +297,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
             .Select(_ => PostWithKeyAsync(client, key, Transaction(700))));
 
         responses.Should().OnlyContain(r => r.StatusCode == HttpStatusCode.Created);
-        var all = await client.GetFromJsonAsync<List<TransactionResponse>>("/api/transactions");
+        var all = await client.GetFromJsonAsync<List<TransactionResponse>>("/api/v1/transactions");
         all.Should().ContainSingle();
     }
 

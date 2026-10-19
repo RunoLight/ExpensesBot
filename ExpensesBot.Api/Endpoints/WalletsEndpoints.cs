@@ -10,7 +10,7 @@ public static class WalletsEndpoints
 {
     public static IEndpointRouteBuilder MapWalletsEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/wallets")
+        var group = app.MapGroup("/wallets")
             .WithTags("Wallets")
             .RequireAuthorization();
 
@@ -18,7 +18,7 @@ public static class WalletsEndpoints
             service.GetAllAsync(user.GetUserId(), ct));
 
         group.MapPost("/", async (CreateWalletRequest request, ClaimsPrincipal user, WalletService service, CancellationToken ct) =>
-            (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(w => $"/api/wallets/{w.Id}"));
+            (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(w => $"/api/v1/wallets/{w.Id}"));
 
         group.MapPost("/join", async (JoinWalletRequest request, ClaimsPrincipal user, WalletService service, CancellationToken ct) =>
             (await service.JoinAsync(user.GetUserId(), request, ct)).ToOk());

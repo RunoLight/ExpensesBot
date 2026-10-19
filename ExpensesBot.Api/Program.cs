@@ -14,7 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Serilog, OpenTelemetry (traces, metrics, OTLP when configured) and the base health check.
 builder.AddServiceDefaults();
 
-// api-version header/query (1.0 when omitted), one OpenAPI document per version.
+// Version in the URL (/api/v1/…), one OpenAPI document per version.
 builder.Services.AddVersionedApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton(TimeProvider.System);

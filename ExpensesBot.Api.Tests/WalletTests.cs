@@ -204,28 +204,28 @@ public class WalletEndpointsTests(CustomWebApplicationFactory factory) : IClassF
         var member = factory.CreateClientForDevUser(700_002);
         var stranger = factory.CreateClientForDevUser(700_003);
 
-        var create = await owner.PostAsJsonAsync("/api/wallets", new { Name = "Семья" });
+        var create = await owner.PostAsJsonAsync("/api/v1/wallets", new { Name = "Семья" });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         var wallet = (await create.Content.ReadFromJsonAsync<WalletResponse>())!;
 
-        (await member.PostAsJsonAsync("/api/wallets/join", new { Code = wallet.InviteCode }))
+        (await member.PostAsJsonAsync("/api/v1/wallets/join", new { Code = wallet.InviteCode }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var recorded = await member.PostAsJsonAsync("/api/transactions",
+        var recorded = await member.PostAsJsonAsync("/api/v1/transactions",
             new { AmountMinor = 12_000, Currency = "AMD", Note = "Продукты", Type = 0, WalletId = wallet.Id });
         recorded.StatusCode.Should().Be(HttpStatusCode.Created);
         var transaction = (await recorded.Content.ReadFromJsonAsync<TransactionResponse>())!;
 
         // The owner sees the member's transaction with its author.
-        var shared = await owner.GetFromJsonAsync<List<WalletTransactionResponse>>($"/api/wallets/{wallet.Id}/transactions");
+        var shared = await owner.GetFromJsonAsync<List<WalletTransactionResponse>>($"/api/v1/wallets/{wallet.Id}/transactions");
         shared.Should().ContainSingle().Which.IsYours.Should().BeFalse();
 
         // Strangers don't learn that the wallet exists; members may not manage it.
-        (await stranger.GetAsync($"/api/wallets/{wallet.Id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
-        (await member.DeleteAsync($"/api/wallets/{wallet.Id}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await stranger.GetAsync($"/api/v1/wallets/{wallet.Id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await member.DeleteAsync($"/api/v1/wallets/{wallet.Id}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
         // Deleting the wallet keeps the member's transaction as a personal one.
-        (await owner.DeleteAsync($"/api/wallets/{wallet.Id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await owner.DeleteAsync($"/api/v1/wallets/{wallet.Id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();

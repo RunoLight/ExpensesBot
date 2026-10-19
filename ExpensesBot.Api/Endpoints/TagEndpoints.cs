@@ -10,7 +10,7 @@ public static class TagEndpoints
 {
     public static IEndpointRouteBuilder MapTagEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/tags")
+        var group = app.MapGroup("/tags")
             .WithTags("Tags")
             .RequireAuthorization();
 
@@ -18,7 +18,7 @@ public static class TagEndpoints
             service.GetAllAsync(user.GetUserId(), ct));
 
         group.MapPost("/", async (CreateTagRequest request, ClaimsPrincipal user, TagService service, CancellationToken ct) =>
-            (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(t => $"/api/tags/{t.Id}"));
+            (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(t => $"/api/v1/tags/{t.Id}"));
 
         group.MapPut("/{id:long}", async (long id, UpdateTagRequest request, ClaimsPrincipal user, TagService service, CancellationToken ct) =>
             (await service.UpdateAsync(user.GetUserId(), id, request, ct)).ToOk());

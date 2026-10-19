@@ -8,17 +8,17 @@ GET {{host}}/health
 
 ###
 
-GET {{host}}/api/profile
+GET {{host}}/api/v1/profile
 X-Dev-User-Id: {{devUser}}
 
 ###
 
-GET {{host}}/api/categories
+GET {{host}}/api/v1/categories
 X-Dev-User-Id: {{devUser}}
 
 ###
 
-POST {{host}}/api/transactions
+POST {{host}}/api/v1/transactions
 X-Dev-User-Id: {{devUser}}
 Content-Type: application/json
 
@@ -32,14 +32,14 @@ Content-Type: application/json
 
 ###
 
-GET {{host}}/api/transactions?limit=20
+GET {{host}}/api/v1/transactions?limit=20
 X-Dev-User-Id: {{devUser}}
 
 ###
 
-GET {{host}}/api/transactions/summary?mode=month&currency=AMD
+GET {{host}}/api/v1/transactions/summary?mode=month&currency=AMD
 X-Dev-User-Id: {{devUser}}
 
 ###
 
-GET {{host}}/api/exchange/rates
+GET {{host}}/api/v1/exchange/rates

@@ -11,7 +11,7 @@ public static class TransactionsEndpoints
 {
     public static IEndpointRouteBuilder MapTransactionsEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/transactions")
+        var group = app.MapGroup("/transactions")
             .WithTags("Transactions")
             .RequireAuthorization();
 
@@ -25,7 +25,7 @@ public static class TransactionsEndpoints
         // A retried POST with the same Idempotency-Key returns the original transaction.
         group.MapPost("/", async (CreateTransactionRequest request, ClaimsPrincipal user, TransactionService service, CancellationToken ct,
                 [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey) =>
-            (await service.CreateAsync(user.GetUserId(), request, ct, idempotencyKey)).ToCreated(t => $"/api/transactions/{t.Id}"));
+            (await service.CreateAsync(user.GetUserId(), request, ct, idempotencyKey)).ToCreated(t => $"/api/v1/transactions/{t.Id}"));
 
         group.MapPost("/bulk", async (List<CreateTransactionRequest>? requests, ClaimsPrincipal user, TransactionService service, CancellationToken ct) =>
             (await service.BulkCreateAsync(user.GetUserId(), requests, ct)).ToOk());

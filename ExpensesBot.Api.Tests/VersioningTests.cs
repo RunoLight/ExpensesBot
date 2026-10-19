@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
 
@@ -6,38 +7,47 @@ namespace ExpensesBot.Api.Tests;
 
 public class VersioningTests(CustomWebApplicationFactory factory) : IClassFixture<CustomWebApplicationFactory>
 {
-    [Fact]
-    public async Task RequestWithoutVersion_IsServedAsV1_AndReportsSupportedVersions()
+    [Theory]
+    [InlineData("/api/v1/categories")]
+    [InlineData("/api/v1.0/categories")]
+    public async Task V1InThePath_IsServed_AndReportsSupportedVersions(string path)
     {
         var client = factory.CreateClientForDevUser(400_001);
 
-        var response = await client.GetAsync("/api/categories");
+        var response = await client.GetAsync(path);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Headers.GetValues("api-supported-versions").Should().ContainSingle().Which.Should().Be("1.0");
     }
 
-    [Theory]
-    [InlineData("header")]
-    [InlineData("query")]
-    public async Task ExplicitV1_IsAccepted(string where)
-    {
-        var client = factory.CreateClientForDevUser(400_002);
-        var request = new HttpRequestMessage(HttpMethod.Get, where == "query" ? "/api/categories?api-version=1.0" : "/api/categories");
-        if (where == "header")
-            request.Headers.Add("api-version", "1.0");
-
-        (await client.SendAsync(request)).StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
     [Fact]
     public async Task UnknownVersion_IsRejected()
     {
-        var client = factory.CreateClientForDevUser(400_003);
-        var request = new HttpRequestMessage(HttpMethod.Get, "/api/categories");
-        request.Headers.Add("api-version", "2.0");
+        var client = factory.CreateClientForDevUser(400_002);
 
-        (await client.SendAsync(request)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var response = await client.GetAsync("/api/v2/categories");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task UnversionedPath_IsNotAnEndpoint()
+    {
+        var client = factory.CreateClientForDevUser(400_003);
+
+        (await client.GetAsync("/api/categories")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Created_PointsToTheVersionedResource()
+    {
+        var client = factory.CreateClientForDevUser(400_004);
+
+        var response = await client.PostAsync("/api/v1/tags",
+            JsonContent.Create(new { Name = "trip", Color = "#36A2EB" }));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        response.Headers.Location!.OriginalString.Should().StartWith("/api/v1/tags/");
     }
 
     [Fact]
@@ -48,7 +58,7 @@ public class VersioningTests(CustomWebApplicationFactory factory) : IClassFixtur
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var root = document.RootElement;
-        root.GetProperty("paths").TryGetProperty("/api/transactions", out _).Should().BeTrue();
+        root.GetProperty("paths").TryGetProperty("/api/v1/transactions", out _).Should().BeTrue();
         var schemes = root.GetProperty("components").GetProperty("securitySchemes");
         schemes.TryGetProperty("TelegramInitData", out _).Should().BeTrue();
         schemes.TryGetProperty("DevUser", out _).Should().BeTrue();

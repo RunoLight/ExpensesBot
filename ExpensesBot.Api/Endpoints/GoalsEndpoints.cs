@@ -10,7 +10,7 @@ public static class GoalsEndpoints
 {
     public static IEndpointRouteBuilder MapGoalsEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/goals")
+        var group = app.MapGroup("/goals")
             .WithTags("Goals")
             .RequireAuthorization();
 
@@ -18,7 +18,7 @@ public static class GoalsEndpoints
             service.GetAllAsync(user.GetUserId(), ct));
 
         group.MapPost("/", async (CreateGoalRequest request, ClaimsPrincipal user, GoalService service, CancellationToken ct) =>
-            (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(g => $"/api/goals/{g.Id}"));
+            (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(g => $"/api/v1/goals/{g.Id}"));
 
         group.MapPut("/{id:long}", async (long id, UpdateGoalRequest request, ClaimsPrincipal user, GoalService service, CancellationToken ct) =>
             (await service.UpdateAsync(user.GetUserId(), id, request, ct)).ToOk());
