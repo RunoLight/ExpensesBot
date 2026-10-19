@@ -22,6 +22,7 @@ public sealed class TelegramBotHandler(
     private const decimal MaxAmount = BotEntryParser.MaxAmount;
     private const string LegacyConfirmPrefix = "confirm:"; // buttons sent by older versions
     private const string CancelData = "cancel";
+    private const string KeepData = "keep";
 
     public const string EntryHint =
         "✏️ Отправьте сумму и, если хотите, описание:\n" +
@@ -93,6 +94,11 @@ public sealed class TelegramBotHandler(
             case "/menu":
                 await SendMenuMessageAsync(botToken, chatId.Value, ct);
                 return true;
+
+            case "/undo":
+                if (telegramUserId.HasValue)
+                    await OfferUndoAsync(botToken, chatId.Value, telegramUserId.Value, ct);
+                return true;
         }
 
         if (telegramUserId.HasValue && TryParseEntry(text, out var entry))
@@ -147,8 +153,17 @@ public sealed class TelegramBotHandler(
                     await EditOrSendAsync(botToken, chatId.Value, messageId, "Отменено.", ct);
                     return true;
 
+                case KeepData:
+                    await EditOrSendAsync(botToken, chatId.Value, messageId, "Хорошо, запись осталась.", ct);
+                    return true;
+
                 case "menu_stats":
                     await SendWeeklyReportAsync(botToken, chatId.Value, telegramUserId ?? 0, ct);
+                    return true;
+
+                case "menu_undo":
+                    if (telegramUserId.HasValue)
+                        await OfferUndoAsync(botToken, chatId.Value, telegramUserId.Value, ct);
                     return true;
 
                 case "menu_income":
@@ -161,6 +176,12 @@ public sealed class TelegramBotHandler(
                     await SendWebAppMessageAsync(botToken, chatId.Value,
                         "Цели и категории настраиваются в приложении:", "Открыть ExpensesBot", WebAppUrl, ct);
                     return true;
+            }
+
+            if (telegramUserId is not null && BotUndo.TryParseCallback(data, out var undoId))
+            {
+                await UndoAsync(botToken, chatId.Value, messageId, telegramUserId.Value, undoId, ct);
+                return true;
             }
 
             if (telegramUserId is not null && RecordCallback.TryParseTypeStep(data, out var typeStep))
@@ -179,16 +200,34 @@ public sealed class TelegramBotHandler(
             var recorded = await RecordTransactionAsync(user, request, note, ct);
 
             var label = request.Type == TransactionType.Income ? "Доход" : "Расход";
-            var result = recorded is { } entry
-                ? $"✅ {label} {FormatAmount(request.Amount)} {entry.Transaction.Currency} записан" +
-                  (entry.Category is { } category ? $" · {category.Icon} {category.Name}" : "") +
-                  (note is not null ? $" · {note}" : "") +
-                  ".\n\nПодробная статистика — в приложении: /expenses"
-                : "Не удалось записать. Откройте приложение /expenses и попробуйте снова.";
 
-            // Replacing the message text also removes the buttons, so the
-            // same transaction can't be recorded twice by tapping again.
-            await EditOrSendAsync(botToken, chatId.Value, messageId, result, ct);
+            if (recorded is not { } entry)
+            {
+                await EditOrSendAsync(botToken, chatId.Value, messageId,
+                    "Не удалось записать. Откройте приложение /expenses и попробуйте снова.", ct);
+                return true;
+            }
+
+            var result = $"✅ {label} {FormatAmount(request.Amount)} {entry.Transaction.Currency} записан" +
+                         (entry.Category is { } category ? $" · {category.Icon} {category.Name}" : "") +
+                         (note is not null ? $" · {note}" : "") +
+                         ".\n\nПодробная статистика — в приложении: /expenses";
+
+            // The record buttons are replaced with a single "undo", so the same
+            // transaction can't be recorded twice by tapping again.
+            var undoKeyboard = new
+            {
+                inline_keyboard = new[]
+                {
+                    new[] { new { text = "↩️ Отменить", callback_data = BotUndo.BuildCallback(entry.Transaction.Id) } }
+                }
+            };
+
+            if (messageId is { } recordedMessageId)
+                await EditMessageAsync(botToken, chatId.Value, recordedMessageId, result, undoKeyboard, ct);
+            else
+                await SendMessageAsync(botToken, chatId.Value, result, undoKeyboard, ct);
+
             return true;
         }
         finally
@@ -449,6 +488,48 @@ public sealed class TelegramBotHandler(
         return new RecordedEntry(transaction, category);
     }
 
+    /// <summary>/undo: shows the latest transaction and asks before deleting it.</summary>
+    private async Task OfferUndoAsync(string botToken, long chatId, long telegramUserId, CancellationToken ct)
+    {
+        await using var scope = serviceProvider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
+
+        var last = await BotUndo.FindLastAsync(db, telegramUserId, ct);
+        if (last is null)
+        {
+            await SendMessageAsync(botToken, chatId, "Пока нечего отменять: записей нет.", null, ct);
+            return;
+        }
+
+        var keyboard = new
+        {
+            inline_keyboard = new[]
+            {
+                new[]
+                {
+                    new { text = "🗑 Удалить", callback_data = BotUndo.BuildCallback(last.Id) },
+                    new { text = "Оставить", callback_data = KeepData }
+                }
+            }
+        };
+
+        await SendMessageAsync(botToken, chatId, $"Удалить последнюю запись?\n{last.Describe()}", keyboard, ct);
+    }
+
+    private async Task UndoAsync(string botToken, long chatId, long? messageId, long telegramUserId, long transactionId, CancellationToken ct)
+    {
+        await using var scope = serviceProvider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
+
+        var deleted = await BotUndo.DeleteAsync(db, telegramUserId, transactionId, ct);
+
+        var text = deleted is not null
+            ? $"↩️ Запись удалена:\n{deleted.Describe()}"
+            : "Эта запись уже удалена.";
+
+        await EditOrSendAsync(botToken, chatId, messageId, text, ct);
+    }
+
     private async Task SendWeeklyReportAsync(string botToken, long chatId, long telegramUserId, CancellationToken ct)
     {
         await using var scope = serviceProvider.CreateAsyncScope();
@@ -515,7 +596,8 @@ public sealed class TelegramBotHandler(
                    "Я — трекер личных финансов. Вот что я умею:\n\n" +
                    "/menu — главное меню\n" +
                    "/expenses — открыть приложение\n" +
-                   "/report — сводка за 7 дней\n\n" +
+                   "/report — сводка за 7 дней\n" +
+                   "/undo — удалить последнюю запись\n\n" +
                    "Или просто отправьте сумму с описанием, например «1500 кофе» или «+50000 зарплата», — я подберу категорию и запишу.";
 
         return SendMessageAsync(botToken, chatId, text, null, ct);
@@ -548,6 +630,9 @@ public sealed class TelegramBotHandler(
                 [
                     new { text = "🎯 Цели", callback_data = "menu_goals" },
                     new { text = "📁 Категории", callback_data = "menu_categories" }
+                ],
+                [
+                    new { text = "↩️ Отменить последнюю запись", callback_data = "menu_undo" }
                 ],
                 [
                     new { text = "📱 Открыть приложение", web_app = new { url = WebAppUrl } }

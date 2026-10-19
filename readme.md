@@ -17,6 +17,7 @@ Built with .NET 10, ASP.NET Core Minimal APIs and EF Core.
 - **Savings goals** with contributions and progress.
 - **Recurring transactions** (daily / weekly / monthly / yearly), income or expense, executed automatically.
 - **Tags**, **CSV export and import** (the export can be re-imported).
+- **Undo** — a ↩️ button under every entry recorded from the chat, and `/undo` for the latest one.
 - **Notifications** — evening reminder, weekly report, budget alerts; `/report` in chat.
 
 ## Frontend
@@ -133,7 +134,7 @@ The API listens on `http://localhost:8080` and the Worker runs the bot; both use
 4. Deploy the client (the `Deploy` workflow publishes it to GitHub Pages) and register that URL with @BotFather (`/newapp` or the bot's menu button).
 5. Send `/start` to the bot.
 
-Bot commands: `/start`, `/menu`, `/expenses` (open the app), `/report` (last 7 days), or just send an amount with an optional note (`1500 кофе`, `+50000 зарплата`, `20$ такси`).
+Bot commands: `/start`, `/menu`, `/expenses` (open the app), `/report` (last 7 days), `/undo` (delete the latest entry after a confirmation), or just send an amount with an optional note (`1500 кофе`, `+50000 зарплата`, `20$ такси`).
 
 ## Tests
 
