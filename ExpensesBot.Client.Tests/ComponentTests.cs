@@ -193,14 +193,14 @@ public class TransactionListTests : BunitContext
             new List<ExchangeRateDto> { new("USD", "AMD", 400m, DateTime.UtcNow) }));
 
         // 200.00 USD → ~80 000.00 AMD
-        cut.FindAll(".transaction-converted").Should().ContainSingle()
+        cut.FindAll(".transaction-row__converted").Should().ContainSingle()
             .Which.TextContent.Should().Contain("AMD");
     }
 
     [Fact]
     public void WithoutRates_DoesNotShowMadeUpConversion()
     {
-        RenderList().FindAll(".transaction-converted").Should().BeEmpty();
+        RenderList().FindAll(".transaction-row__converted").Should().BeEmpty();
     }
 }
 
