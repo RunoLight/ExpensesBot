@@ -64,6 +64,22 @@ public static class CategoryGuesser
         return null;
     }
 
+    /// <summary>
+    /// Categories to offer as buttons: the guess first, then the ones the user
+    /// picks most often for this kind of transaction, then alphabetically.
+    /// </summary>
+    public static List<CategoryOption> Suggest(
+        IReadOnlyList<CategoryOption> categories,
+        IReadOnlyDictionary<long, int> usage,
+        long? guessedId,
+        int max = 6) =>
+        categories
+            .OrderByDescending(c => c.Id == guessedId)
+            .ThenByDescending(c => usage.GetValueOrDefault(c.Id))
+            .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(max)
+            .ToList();
+
     private static string[] Words(string text) =>
         text.ToLowerInvariant()
             .Split(Separators, StringSplitOptions.RemoveEmptyEntries)

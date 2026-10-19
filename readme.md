@@ -10,7 +10,7 @@ Built with .NET 10, ASP.NET Core Minimal APIs and EF Core.
 
 ## What it does
 
-- **Record in two taps** — send `1500 кофе`, `+50000 зарплата` or `20$ такси` to the bot; it parses amount, currency, type and note, guesses the category from your history and asks to confirm.
+- **Record in two taps** — send `1500 кофе`, `+50000 зарплата` or `20$ такси` to the bot; it parses amount, currency, type and note, then offers category buttons with its best guess first.
 - **Mini App dashboard** — income, expenses and balance converted into one display currency; spending by category and by month; search, filter, sort.
 - **Multi-currency** — AMD, USD and RUB with daily rates from the Central Bank of Russia.
 - **Budgets** per category or overall, with a Telegram alert at 90%.

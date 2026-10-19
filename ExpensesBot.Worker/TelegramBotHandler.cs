@@ -163,6 +163,14 @@ public sealed class TelegramBotHandler(
                     return true;
             }
 
+            if (telegramUserId is not null && RecordCallback.TryParseTypeStep(data, out var typeStep))
+            {
+                var stepUser = await GetOrCreateUserAsync(telegramUserId.Value, sender?["first_name"]?.Value<string>(), ct);
+                await ShowCategoryPickerAsync(botToken, chatId.Value, stepUser, typeStep,
+                    ReadNoteFromQuestion(callbackQuery), messageId, null, ct);
+                return true;
+            }
+
             if (telegramUserId is null || !TryParseRecord(data, out var request))
                 return false;
 
@@ -233,6 +241,10 @@ public sealed class TelegramBotHandler(
         return original is not null && TryParseEntry(original, out var entry) ? entry.Note : null;
     }
 
+    /// <summary>
+    /// First answer to an entry: asks "expense or income?" unless the sign
+    /// already said it, in which case it goes straight to the category picker.
+    /// </summary>
     private async Task AskToConfirmAsync(
         string botToken,
         long chatId,
@@ -244,40 +256,98 @@ public sealed class TelegramBotHandler(
     {
         var user = await GetOrCreateUserAsync(telegramUserId, firstName, ct);
         var currency = entry.Currency ?? user.DefaultCurrency;
-        var category = await GuessCategoryAsync(user.Id, entry.Note, ct);
+        var guess = await GuessCategoryAsync(user.Id, entry.Note, ct);
 
-        string Record(TransactionType type) =>
-            new RecordCallback(type, entry.Amount, currency, category?.Id).Build();
-
-        var cancel = new { text = "❌ Отмена", callback_data = CancelData };
-
-        object[][] rows = entry.Type switch
+        if (entry.Type is { } knownType)
         {
-            TransactionType.Income =>
-            [
-                [new { text = "✅ Записать доход", callback_data = Record(TransactionType.Income) }],
-                [cancel]
-            ],
-            TransactionType.Expense =>
-            [
-                [new { text = "✅ Записать расход", callback_data = Record(TransactionType.Expense) }],
-                [cancel]
-            ],
-            _ =>
-            [
+            var request = new RecordCallback(knownType, entry.Amount, currency, guess?.Id);
+            await ShowCategoryPickerAsync(botToken, chatId, user, request, entry.Note, null, replyToMessageId, ct);
+            return;
+        }
+
+        string TypeStep(TransactionType type) =>
+            new RecordCallback(type, entry.Amount, currency, guess?.Id).BuildTypeStep();
+
+        var keyboard = new
+        {
+            inline_keyboard = new object[][]
+            {
                 [
-                    new { text = "➖ Расход", callback_data = Record(TransactionType.Expense) },
-                    new { text = "➕ Доход", callback_data = Record(TransactionType.Income) }
+                    new { text = "➖ Расход", callback_data = TypeStep(TransactionType.Expense) },
+                    new { text = "➕ Доход", callback_data = TypeStep(TransactionType.Income) }
                 ],
-                [cancel]
-            ]
+                [
+                    new { text = "❌ Отмена", callback_data = CancelData }
+                ]
+            }
         };
 
-        var question = entry.Type is null ? "Это расход или доход?" : "Записать?";
-        var text = DescribeEntry(entry.Amount, currency, entry.Note, category) + "\n\n" + question;
+        var text = DescribeEntry(entry.Amount, currency, entry.Note, guess) + "\n\nЭто расход или доход?";
 
-        // Replying to the user's message lets the button handler read the note back.
-        await SendMessageAsync(botToken, chatId, text, new { inline_keyboard = rows }, ct, replyToMessageId);
+        // Replying to the user's message lets the button handlers read the note back.
+        await SendMessageAsync(botToken, chatId, text, keyboard, ct, replyToMessageId);
+    }
+
+    /// <summary>
+    /// Offers the guessed category and the user's most used ones as buttons.
+    /// Edits the "expense or income?" message when there is one, so the chat
+    /// keeps a single message per entry.
+    /// </summary>
+    private async Task ShowCategoryPickerAsync(
+        string botToken,
+        long chatId,
+        User user,
+        RecordCallback request,
+        string? note,
+        long? messageIdToEdit,
+        long? replyToMessageId,
+        CancellationToken ct)
+    {
+        await using var scope = serviceProvider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
+
+        var categories = await LoadCategoriesAsync(db, user.Id, ct);
+        var since = DateTime.UtcNow.AddDays(-90);
+
+        var usage = await db.Transactions
+            .AsNoTracking()
+            .Where(t => t.UserId == user.Id &&
+                        t.Type == request.Type &&
+                        t.CategoryId != null &&
+                        t.CreatedAtUtc >= since)
+            .GroupBy(t => t.CategoryId!.Value)
+            .Select(g => new { CategoryId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.CategoryId, x => x.Count, ct);
+
+        var guess = categories.FirstOrDefault(c => c.Id == request.CategoryId);
+        var options = CategoryGuesser.Suggest(categories, usage, guess?.Id);
+
+        string Record(long? categoryId) => (request with { CategoryId = categoryId }).Build();
+
+        var rows = options
+            .Select(c => new
+            {
+                text = (c.Id == guess?.Id ? "⭐ " : "") + $"{c.Icon ?? "📁"} {c.Name}",
+                callback_data = Record(c.Id)
+            })
+            .Chunk(2)
+            .Select(row => row.Cast<object>().ToArray())
+            .Append(new object[]
+            {
+                new { text = "🚫 Без категории", callback_data = Record(null) },
+                new { text = "❌ Отмена", callback_data = CancelData }
+            })
+            .ToArray();
+
+        var label = request.Type == TransactionType.Income ? "➕ Доход" : "➖ Расход";
+        var text = DescribeEntry(request.Amount, request.Currency ?? user.DefaultCurrency, note, guess) +
+                   $"\n\n{label} — выберите категорию:";
+        var keyboard = new { inline_keyboard = rows };
+
+        if (messageIdToEdit is { } messageId)
+            await EditMessageAsync(botToken, chatId, messageId, text, keyboard, ct);
+        else
+            await SendMessageAsync(botToken, chatId, text, keyboard, ct, replyToMessageId);
     }
 
     public static string DescribeEntry(decimal amount, string currency, string? note, CategoryOption? category) =>
@@ -508,6 +578,10 @@ public sealed class TelegramBotHandler(
                 ? new { message_id = messageId, allow_sending_without_reply = true }
                 : null
         }, ct);
+
+    private Task EditMessageAsync(string botToken, long chatId, long messageId, string text, object? replyMarkup, CancellationToken ct) =>
+        CallTelegramAsync(botToken, "editMessageText",
+            new { chat_id = chatId, message_id = messageId, text, reply_markup = replyMarkup }, ct);
 
     private Task EditOrSendAsync(string botToken, long chatId, long? messageId, string text, CancellationToken ct) =>
         messageId is null

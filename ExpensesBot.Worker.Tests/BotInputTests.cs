@@ -116,6 +116,24 @@ public class CategoryGuesserTests
         CategoryGuesser.Guess(note, Categories, [])!.Name.Should().Be(expected);
     }
 
+    [Fact]
+    public void Suggest_PutsGuessFirst_ThenMostUsed_ThenAlphabetical()
+    {
+        var usage = new Dictionary<long, int> { [2] = 10, [5] = 3 };
+
+        var suggested = CategoryGuesser.Suggest(Categories, usage, guessedId: 3, max: 4);
+
+        suggested.Select(c => c.Id).Should().Equal(3, 2, 5, 4);
+    }
+
+    [Fact]
+    public void Suggest_WithoutGuessOrUsage_IsAlphabetical()
+    {
+        CategoryGuesser.Suggest(Categories, new Dictionary<long, int>(), null)
+            .Select(c => c.Name)
+            .Should().Equal("Зарплата", "Кафе", "Продукты", "Спорт", "Транспорт");
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("подарок маме")]
@@ -159,6 +177,19 @@ public class RecordCallbackTests
     public void InvalidParts_AreRejected(string data)
     {
         RecordCallback.TryParse(data, out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TypeStep_RoundTripsAndIsNotARecordButton()
+    {
+        var step = new RecordCallback(TransactionType.Income, 50_000m, "AMD", 4);
+
+        var data = step.BuildTypeStep();
+
+        data.Should().Be("ty:i:50000:AMD:4");
+        RecordCallback.TryParseTypeStep(data, out var parsed).Should().BeTrue();
+        parsed.Should().Be(step);
+        RecordCallback.TryParse(data, out _).Should().BeFalse("choosing the type must not record anything yet");
     }
 
     [Fact]
