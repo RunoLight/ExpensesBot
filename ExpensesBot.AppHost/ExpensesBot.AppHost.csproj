@@ -1,0 +1,15 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.6.1">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Only `dotnet run` is used, which doesn't need the Aspire CLI bundle. -->
+    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ExpensesBot.Api\ExpensesBot.Api.csproj" />
+    <ProjectReference Include="..\ExpensesBot.Worker\ExpensesBot.Worker.csproj" />
+    <ProjectReference Include="..\ExpensesBot.Client\ExpensesBot.Client.csproj" />
+  </ItemGroup>
+
+</Project>

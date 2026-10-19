@@ -1,6 +1,7 @@
 using System.Globalization;
 using ExpensesBot.Data;
 using ExpensesBot.Data.Entities;
+using ExpensesBot.ServiceDefaults;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -39,6 +40,13 @@ public sealed class TelegramBotHandler(
         JObject update,
         CancellationToken ct)
     {
+        var type = update["callback_query"] is not null ? "callback" : update["message"] is not null ? "message" : "other";
+
+        // The Worker has no incoming HTTP requests, so each update is a trace root.
+        using var activity = Telemetry.ActivitySource.StartActivity("bot.update");
+        activity?.SetTag("telegram.update.type", type);
+        Telemetry.BotUpdates.Add(1, new KeyValuePair<string, object?>("type", type));
+
         try
         {
             if (update["callback_query"] is JObject callbackQuery)
@@ -51,6 +59,7 @@ public sealed class TelegramBotHandler(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, ex.Message);
             logger.LogError(ex, "Error processing update {UpdateId}", update["update_id"]);
             return false;
         }
@@ -524,6 +533,10 @@ public sealed class TelegramBotHandler(
 
         db.Transactions.Add(transaction);
         await db.SaveChangesAsync(ct);
+
+        Telemetry.TransactionsCreated.Add(1,
+            new KeyValuePair<string, object?>("source", "bot"),
+            new KeyValuePair<string, object?>("type", transaction.Type.ToString()));
 
         return new RecordedEntry(transaction, category);
     }

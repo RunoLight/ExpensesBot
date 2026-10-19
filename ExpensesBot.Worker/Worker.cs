@@ -1,5 +1,6 @@
 using ExpensesBot.Data;
 using ExpensesBot.Data.Entities;
+using ExpensesBot.ServiceDefaults;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json.Linq;
 
@@ -72,6 +73,8 @@ public class Worker(
 
     private async Task RunMaintenanceAsync(string? botToken, CancellationToken ct)
     {
+        using var activity = Telemetry.ActivitySource.StartActivity("worker.maintenance");
+
         await ProcessRecurringTransactionsAsync(ct);
 
         await serviceProvider
@@ -169,7 +172,10 @@ public class Worker(
             await db.SaveChangesAsync(ct);
 
         if (created > 0)
+        {
+            Telemetry.TransactionsCreated.Add(created, new KeyValuePair<string, object?>("source", "recurring"));
             logger.LogInformation("Created {Count} transactions from recurring rules", created);
+        }
     }
 
     /// <summary>

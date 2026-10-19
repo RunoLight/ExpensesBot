@@ -7,10 +7,12 @@ WORKDIR /src
 # Restore first so the layer is cached until a project file changes.
 COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY ExpensesBot.Data/ExpensesBot.Data.csproj ExpensesBot.Data/
+COPY ExpensesBot.ServiceDefaults/ExpensesBot.ServiceDefaults.csproj ExpensesBot.ServiceDefaults/
 COPY ExpensesBot.Api/ExpensesBot.Api.csproj ExpensesBot.Api/
 RUN dotnet restore ExpensesBot.Api/ExpensesBot.Api.csproj
 
 COPY ExpensesBot.Data/ ExpensesBot.Data/
+COPY ExpensesBot.ServiceDefaults/ ExpensesBot.ServiceDefaults/
 COPY ExpensesBot.Api/ ExpensesBot.Api/
 RUN dotnet publish ExpensesBot.Api/ExpensesBot.Api.csproj -c Release -o /app --no-restore
 

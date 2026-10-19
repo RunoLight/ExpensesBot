@@ -65,6 +65,8 @@ flowchart LR
 |---|---|
 | `ExpensesBot.Api` | REST API. `Authentication/` — ASP.NET Core authentication handler for Telegram `initData`; `Application/` — one service per feature (transactions, summary, budgets, goals, …) returning `Result<T>`; `Endpoints/` — thin Minimal API mappings; `Contracts/` — request/response records. Applies EF Core migrations on startup. |
 | `ExpensesBot.Client` | Blazor WebAssembly Mini App, deployed to GitHub Pages. |
+| `ExpensesBot.ServiceDefaults` | Shared host setup (the Aspire "service defaults" pattern): Serilog, OpenTelemetry traces and metrics, `/health` and `/alive`. |
+| `ExpensesBot.AppHost` | .NET Aspire AppHost: runs the API, the Worker and the client together with the Aspire dashboard (local development only). |
 | `ExpensesBot.Data` | EF Core model, migrations, and shared rules: supported currencies, new-user defaults, database path resolution. |
 | `ExpensesBot.Worker` | Telegram bot (long polling), recurring transactions, scheduled notifications, the outbox dispatcher, exchange-rate updates. |
 | `*.Tests` | xUnit tests: API integration tests on in-memory SQLite, bUnit component tests, Worker and Data unit tests. |
@@ -83,6 +85,8 @@ flowchart LR
 - **Creating a transaction is idempotent.** `POST /api/transactions` accepts an `Idempotency-Key` header. The key is stored on the transaction under a unique `(UserId, IdempotencyKey)` index: a repeated request returns the original transaction, a concurrent duplicate loses the race on the index and gets the same answer, and reusing a key for a different amount, currency, type, category or wallet is rejected with 422. The Mini App generates one key per form, so a double tap or a network retry can't record the same entry twice.
 - **Notifications go through a transactional outbox.** Nobody calls Telegram in the middle of business logic: the API and the Worker add an `OutboxMessages` row in the same `SaveChanges` as the change it is about (a wallet transaction, a reminder's `NotificationLogs` entry), so a message exists if and only if that change was committed. `OutboxDispatcher`, a separate hosted service in the Worker, delivers due messages, records each outcome right after sending, retries transient failures (network, 5xx, 429 with Telegram's `retry_after`) with exponential backoff up to 8 attempts, and drops permanent ones (bot blocked). A slow Telegram therefore never blocks the bot or an API request.
 - **Scheduled notifications are queued once.** Every reminder, weekly report and budget alert is recorded in `NotificationLogs` with a unique `(UserId, Kind, Key)` index, together with its outbox message. The Worker checks it before queueing, so restarts or a second instance never queue the same message twice.
+- **Observability through OpenTelemetry.** Both services log through Serilog (readable lines in Development, compact JSON elsewhere) and export traces, metrics and logs over OTLP whenever `OTEL_EXPORTER_OTLP_ENDPOINT` is set, so any OpenTelemetry backend works and the Aspire dashboard works with no extra setup. Traces cover incoming requests, EF Core queries and outgoing HTTP; the Worker, which has no incoming requests, opens its own spans per bot update, maintenance run and outbox delivery. Custom metrics: `expensesbot.transactions.created` (by source: api, bot, recurring), `expensesbot.outbox.attempts` (by kind and outcome), `expensesbot.bot.updates`. Telegram URLs carry the bot token, so the HTTP instrumentation records them with the token masked.
+- **Health checks that mean something.** `/health` returns a JSON report for the database (EF Core) and the Telegram Bot API (`getMe`, cached for a minute). Telegram being down makes the API *Degraded*, not *Unhealthy*: the Mini App keeps working, because `initData` is verified offline. `/alive` is a dependency-free liveness probe.
 - **One SQLite file, two processes.** The API and the Worker share the database. Relative paths are resolved against the repository root so both open the same file, and both apply migrations at startup under EF Core's migration lock.
 
 ## Getting started
@@ -103,6 +107,8 @@ flowchart LR
 | `Telegram:InitDataMaxAgeHours` | API | `24` | How long a Mini App session stays valid. |
 | `Cors:AllowedOrigins` | API | GitHub Pages origin | Add the origin the client is served from. |
 | `ApiBaseUrl` (`Client/wwwroot/appsettings*.json`) | Client | `http://localhost:5069/` in Development | Public URL of the API for the deployed client. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | API, Worker | — | Send logs, traces and metrics to an OpenTelemetry collector (the Aspire AppHost sets it). |
+| `Serilog:MinimumLevel` | API, Worker | `Information` | Log levels, with per-namespace `Override`s. |
 | `BotUsername` (`Client/wwwroot/appsettings.json`) | Client | empty | Bot username for `t.me/<bot>?start=join_CODE` wallet invite links; without it the app shows only the code. |
 
 ```bash
@@ -117,6 +123,12 @@ dotnet user-secrets --project ExpensesBot.Worker set "Telegram:BotToken" "<token
 dotnet run --project ExpensesBot.Api      # http://localhost:5069 (creates data/expenses.db)
 dotnet run --project ExpensesBot.Worker   # bot + background jobs
 dotnet run --project ExpensesBot.Client   # http://localhost:5160
+```
+
+Or start everything at once with the [.NET Aspire](https://aspire.dev) dashboard, which shows the logs, traces, metrics and health of each service:
+
+```bash
+dotnet run --project ExpensesBot.AppHost  # dashboard at http://localhost:15180 (login link in the console)
 ```
 
 Opened in a normal browser, the Development client signs in as a test user via `X-Dev-User-Id`.
@@ -148,7 +160,7 @@ dotnet test ExpensesBot.slnx
 ```
 
 - **Application service tests** exercise summary math, budget and goal progress directly against a migrated in-memory SQLite database with a fixed clock.
-- **API integration tests** run the real application (`WebApplicationFactory`) against an in-memory SQLite database created from the migrations. They cover validation, per-user isolation, idempotent creation (including concurrent duplicates), currency conversion, summary math, goals, CSV export, and authentication with correctly signed, tampered, expired and foreign `initData`.
+- **API integration tests** run the real application (`WebApplicationFactory`) against an in-memory SQLite database created from the migrations. They cover validation, health checks, per-user isolation, idempotent creation (including concurrent duplicates), currency conversion, summary math, goals, CSV export, and authentication with correctly signed, tampered, expired and foreign `initData`.
 - **Component tests** (bUnit) cover the summary card, history search/filter/sort, the edit and delete-account dialogs, shared form inputs, goal contributions and the help dialog.
 - **Worker and Data tests** cover recurrence scheduling, outbox delivery, retries and backoff, CBR rate parsing, bot input parsing, currency rules, and a check that the migrations match the EF model.
 
@@ -172,7 +184,7 @@ GitHub Actions runs build and tests on every push and pull request (`.github/wor
 | GET/POST/PUT/DELETE | `/api/wallets[/{id}]`, `POST /join`, `POST /{id}/invite`, `POST /{id}/leave`, `DELETE /{id}/members/{userId}` | Shared wallets and membership |
 | GET | `/api/wallets/{id}/transactions`, `/api/wallets/{id}/summary` | Wallet transactions with authors; totals per member and category |
 
-In Development the OpenAPI document is served at `/openapi/v1.json`.
+In Development the OpenAPI document is served at `/openapi/v1.json`. `/health` (JSON report: database, Telegram) and `/alive` are public.
 
 ## Roadmap
 
@@ -183,7 +195,7 @@ In Development the OpenAPI document is served at `/openapi/v1.json`.
 - [ ] Voice input — send a voice message like «потратил три тысячи на продукты»; speech-to-text, then the same parser as typed entries
 - [x] Idempotent transaction creation — an `Idempotency-Key` header so a double tap or a network retry never creates a duplicate
 - [x] Outbox for notifications — the API and the Worker write events to a table; a separate dispatcher delivers them to Telegram with retries
-- [ ] Observability — OpenTelemetry traces and metrics, structured logging with Serilog, `/health` checking the database and Telegram (possibly via .NET Aspire)
+- [x] Observability — OpenTelemetry traces and metrics, structured logging with Serilog, `/health` checking the database and Telegram (possibly via .NET Aspire)
 - [ ] Rate limiting (`AddRateLimiter`) for the API and the bot
 - [ ] API versioning and Scalar UI instead of the bare `/openapi/v1.json`
 - [ ] Public demo mode — a read-only user with generated data, so the app can be explored without Telegram

@@ -1,9 +1,11 @@
 <Solution>
   <Project Path="ExpensesBot.Api.Tests/ExpensesBot.Api.Tests.csproj" />
   <Project Path="ExpensesBot.Api/ExpensesBot.Api.csproj" />
+  <Project Path="ExpensesBot.AppHost/ExpensesBot.AppHost.csproj" />
   <Project Path="ExpensesBot.Client.Tests/ExpensesBot.Client.Tests.csproj" />
   <Project Path="ExpensesBot.Client/ExpensesBot.Client.csproj" />
   <Project Path="ExpensesBot.Data/ExpensesBot.Data.csproj" />
+  <Project Path="ExpensesBot.ServiceDefaults/ExpensesBot.ServiceDefaults.csproj" />
   <Project Path="ExpensesBot.Tests/ExpensesBot.Tests.csproj" />
   <Project Path="ExpensesBot.Worker.Tests/ExpensesBot.Worker.Tests.csproj" />
   <Project Path="ExpensesBot.Worker/ExpensesBot.Worker.csproj" />

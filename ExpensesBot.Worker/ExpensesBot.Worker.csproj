@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ExpensesBot.Data\ExpensesBot.Data.csproj" />
+    <ProjectReference Include="..\ExpensesBot.ServiceDefaults\ExpensesBot.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>

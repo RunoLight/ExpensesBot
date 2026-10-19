@@ -1,6 +1,9 @@
+using System.Net;
+using ExpensesBot.Api.Services;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace ExpensesBot.Api.Tests;
@@ -41,7 +44,22 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             });
         });
 
+        // The /health Telegram check must not reach the real Bot API from tests.
+        builder.ConfigureServices(services => services
+            .AddHttpClient(TelegramHealthCheck.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(TelegramGetMe)));
+
         return base.CreateHost(builder);
+    }
+
+    /// <summary>What the stubbed Telegram answers to getMe.</summary>
+    protected virtual HttpResponseMessage TelegramGetMe() =>
+        new(HttpStatusCode.OK) { Content = new StringContent("""{"ok":true,"result":{"id":1,"username":"expenses_test_bot"}}""") };
+
+    private sealed class StubHandler(Func<HttpResponseMessage> respond) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(respond());
     }
 
     public HttpClient CreateClientForDevUser(long telegramUserId)

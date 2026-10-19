@@ -1,5 +1,6 @@
 using ExpensesBot.Data;
 using ExpensesBot.Data.Entities;
+using ExpensesBot.ServiceDefaults;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExpensesBot.Worker;
@@ -100,9 +101,25 @@ public sealed class OutboxDispatcher(
 
         foreach (var message in due)
         {
+            using var activity = Telemetry.ActivitySource.StartActivity("outbox.deliver");
+            activity?.SetTag("outbox.message.id", message.Id);
+            activity?.SetTag("outbox.message.kind", message.Kind);
+            activity?.SetTag("outbox.message.attempt", message.Attempts + 1);
+
             var result = await send(message.User.TelegramUserId, message.Text, ct);
             Apply(message, result, nowUtc);
             await db.SaveChangesAsync(ct);
+
+            var outcome = message.Status switch
+            {
+                OutboxStatus.Sent => "sent",
+                OutboxStatus.Failed => "failed",
+                _ => "retry"
+            };
+            activity?.SetTag("outbox.outcome", outcome);
+            Telemetry.OutboxAttempts.Add(1,
+                new KeyValuePair<string, object?>("kind", message.Kind),
+                new KeyValuePair<string, object?>("outcome", outcome));
 
             switch (message.Status)
             {

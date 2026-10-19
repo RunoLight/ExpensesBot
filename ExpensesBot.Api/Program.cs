@@ -3,10 +3,15 @@ using ExpensesBot.Api.Authentication;
 using ExpensesBot.Api.Endpoints;
 using ExpensesBot.Api.Services;
 using ExpensesBot.Data;
+using ExpensesBot.ServiceDefaults;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Serilog, OpenTelemetry (traces, metrics, OTLP when configured) and the base health check.
+builder.AddServiceDefaults();
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
@@ -37,6 +42,13 @@ builder.Services.AddScoped<TagService>();
 builder.Services.AddScoped<ProfileService>();
 builder.Services.AddScoped<WalletService>();
 
+// /health reports the database and the Telegram Bot API; see MapDefaultEndpoints.
+builder.Services.AddHttpClient(TelegramHealthCheck.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(5));
+builder.Services.AddSingleton<TelegramHealthCheck>();
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ExpensesDbContext>("database")
+    .AddCheck<TelegramHealthCheck>("telegram");
+
 var allowedOrigins = builder.Configuration
     .GetSection("Cors:AllowedOrigins")
     .Get<string[]>() ?? [];
@@ -60,6 +72,7 @@ using (var scope = app.Services.CreateScope())
         .Database.Migrate();
 }
 
+app.UseSerilogRequestLogging();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseCors("Client");
@@ -81,7 +94,7 @@ app.MapProfileEndpoints();
 app.MapTagEndpoints();
 app.MapWalletsEndpoints();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapDefaultEndpoints();
 
 app.Run();
 

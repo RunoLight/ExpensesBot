@@ -4,6 +4,7 @@ using ExpensesBot.Api.Common;
 using ExpensesBot.Api.Contracts.Transactions;
 using ExpensesBot.Data;
 using ExpensesBot.Data.Entities;
+using ExpensesBot.ServiceDefaults;
 using Microsoft.EntityFrameworkCore;
 using ContractTransactionType = ExpensesBot.Api.Contracts.Transactions.TransactionType;
 using EntityTransactionType = ExpensesBot.Data.Entities.TransactionType;
@@ -86,6 +87,10 @@ public sealed class TransactionService(ExpensesDbContext db)
 
             throw;
         }
+
+        Telemetry.TransactionsCreated.Add(1,
+            new KeyValuePair<string, object?>("source", "api"),
+            new KeyValuePair<string, object?>("type", transaction.Type.ToString()));
 
         return ToResponse(transaction, categoryName);
     }

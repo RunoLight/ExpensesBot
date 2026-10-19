@@ -1,8 +1,12 @@
 using ExpensesBot.Data;
+using ExpensesBot.ServiceDefaults;
 using ExpensesBot.Worker;
 using Microsoft.EntityFrameworkCore;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+// Serilog, OpenTelemetry (traces, metrics, OTLP when configured).
+builder.AddServiceDefaults();
 
 builder.Services.AddHttpClient();
 
