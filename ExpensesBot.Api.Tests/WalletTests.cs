@@ -101,6 +101,27 @@ public class WalletServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task RecordingIntoTheWallet_QueuesAMessageForTheOtherMembers()
+    {
+        var owner = await _database.AddUserAsync(1);
+        var member = await _database.AddUserAsync(2);
+        await using var db = _database.CreateContext();
+        var service = CreateService(db);
+        var wallet = (await service.CreateAsync(owner.Id, new CreateWalletRequest("Семья"), default)).Value!;
+        await service.JoinAsync(member.Id, new JoinWalletRequest(wallet.InviteCode!), default);
+
+        await new TransactionService(db).CreateAsync(owner.Id,
+            new CreateTransactionRequest(150_000, "AMD", null, null, "Продукты", WalletId: wallet.Id), default);
+        await new TransactionService(db).CreateAsync(owner.Id,
+            new CreateTransactionRequest(500, "AMD", null, null, "Личное"), default);
+
+        var message = await db.OutboxMessages.SingleAsync();
+        message.UserId.Should().Be(member.Id, "the author doesn't need to hear about their own entry");
+        message.Kind.Should().Be(WalletNotifications.TransactionKind);
+        message.Text.Should().Contain("Семья").And.Contain("1 500,00 AMD").And.Contain("Продукты");
+    }
+
+    [Fact]
     public async Task Summary_SplitsSpendingByMember_InOneCurrency()
     {
         var owner = await _database.AddUserAsync(1);

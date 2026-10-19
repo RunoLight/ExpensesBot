@@ -16,7 +16,7 @@ public sealed record UndoCandidate(
     DateTime OccurredAtUtc)
 {
     public string Describe() =>
-        $"{(Type == TransactionType.Income ? "➕" : "➖")} {NotificationService.FormatMoney(AmountMinor, Currency)}" +
+        $"{(Type == TransactionType.Income ? "➕" : "➖")} {NotificationTexts.FormatMoney(AmountMinor, Currency)}" +
         (CategoryName is not null ? $" · {CategoryName}" : "") +
         (Note is not null ? $" · {Note}" : "") +
         $" · {OccurredAtUtc.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture)}";

@@ -19,6 +19,7 @@ public sealed class ExpensesDbContext(
     public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
     public DbSet<Wallet> Wallets => Set<Wallet>();
     public DbSet<WalletMember> WalletMembers => Set<WalletMember>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -187,6 +188,28 @@ public sealed class ExpensesDbContext(
             .WithMany()
             .HasForeignKey(x => x.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<OutboxMessage>()
+            .HasOne(x => x.User)
+            .WithMany()
+            .HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<OutboxMessage>()
+            .Property(x => x.Kind)
+            .HasMaxLength(OutboxMessage.MaxKindLength);
+
+        modelBuilder.Entity<OutboxMessage>()
+            .Property(x => x.Text)
+            .HasMaxLength(OutboxMessage.MaxTextLength);
+
+        modelBuilder.Entity<OutboxMessage>()
+            .Property(x => x.LastError)
+            .HasMaxLength(OutboxMessage.MaxErrorLength);
+
+        // The dispatcher's query: pending messages that are due, oldest first.
+        modelBuilder.Entity<OutboxMessage>()
+            .HasIndex(x => new { x.Status, x.NextAttemptAtUtc });
 
         // Deleting a wallet keeps the members' transactions as personal ones.
         modelBuilder.Entity<Transaction>()

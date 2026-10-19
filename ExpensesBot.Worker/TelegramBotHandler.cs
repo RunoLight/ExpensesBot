@@ -613,15 +613,15 @@ public sealed class TelegramBotHandler(
         {
             "📊 Последние 7 дней",
             "",
-            $"➖ Расходы: {NotificationService.FormatMoney(expense, currency)}",
-            $"➕ Доходы: {NotificationService.FormatMoney(income, currency)}"
+            $"➖ Расходы: {NotificationTexts.FormatMoney(expense, currency)}",
+            $"➕ Доходы: {NotificationTexts.FormatMoney(income, currency)}"
         };
 
         if (topCategories.Count > 0)
         {
             lines.Add("");
             lines.Add("📂 Топ категорий:");
-            lines.AddRange(topCategories.Select(c => $"  • {c.Name}: {NotificationService.FormatMoney(c.Total, currency)}"));
+            lines.AddRange(topCategories.Select(c => $"  • {c.Name}: {NotificationTexts.FormatMoney(c.Total, currency)}"));
         }
 
         lines.Add("");

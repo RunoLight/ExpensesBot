@@ -22,6 +22,9 @@ public sealed class NotificationLedgerTests : IDisposable
     private ExpensesDbContext CreateContext() =>
         new(new DbContextOptionsBuilder<ExpensesDbContext>().UseSqlite(_connection).Options);
 
+    private static OutboxMessage Message(long userId, DateTime nowUtc) =>
+        OutboxMessage.Create(userId, NotificationTexts.DailyReminderKind, "text", nowUtc);
+
     private async Task<long> AddUserAsync(long telegramUserId)
     {
         await using var db = CreateContext();
@@ -38,7 +41,7 @@ public sealed class NotificationLedgerTests : IDisposable
         var today = NotificationLedger.DateKey(Now);
 
         await using (var db = CreateContext())
-            await new NotificationLedger(db).MarkSentAsync(userId, NotificationKind.DailyReminder, today, Now, default);
+            await new NotificationLedger(db).EnqueueOnceAsync(userId, NotificationKind.DailyReminder, today, Message(userId, Now), default);
 
         // A new context = what the Worker sees after a restart.
         await using var restarted = CreateContext();
@@ -51,7 +54,7 @@ public sealed class NotificationLedgerTests : IDisposable
     }
 
     [Fact]
-    public async Task MarkingTwice_DoesNotThrow()
+    public async Task QueueingTwice_QueuesOneMessage()
     {
         var userId = await AddUserAsync(1);
         var key = NotificationLedger.BudgetKey(42);
@@ -59,11 +62,12 @@ public sealed class NotificationLedgerTests : IDisposable
         await using var db = CreateContext();
         var ledger = new NotificationLedger(db);
 
-        await ledger.MarkSentAsync(userId, NotificationKind.BudgetAlert, key, Now, default);
-        var again = () => ledger.MarkSentAsync(userId, NotificationKind.BudgetAlert, key, Now, default);
+        await ledger.EnqueueOnceAsync(userId, NotificationKind.BudgetAlert, key, Message(userId, Now), default);
+        var again = () => ledger.EnqueueOnceAsync(userId, NotificationKind.BudgetAlert, key, Message(userId, Now), default);
 
-        await again.Should().NotThrowAsync();
+        (await again()).Should().BeFalse();
         (await db.NotificationLogs.CountAsync()).Should().Be(1);
+        (await db.OutboxMessages.CountAsync()).Should().Be(1);
     }
 
     [Fact]
@@ -75,7 +79,7 @@ public sealed class NotificationLedgerTests : IDisposable
 
         await using var db = CreateContext();
         var ledger = new NotificationLedger(db);
-        await ledger.MarkSentAsync(first, NotificationKind.DailyReminder, today, Now, default);
+        await ledger.EnqueueOnceAsync(first, NotificationKind.DailyReminder, today, Message(first, Now), default);
 
         (await ledger.WasSentAsync(second, NotificationKind.DailyReminder, today, default)).Should().BeFalse();
     }
@@ -88,9 +92,9 @@ public sealed class NotificationLedgerTests : IDisposable
 
         await using var db = CreateContext();
         var ledger = new NotificationLedger(db);
-        await ledger.MarkSentAsync(userId, NotificationKind.DailyReminder, NotificationLedger.DateKey(old), old, default);
-        await ledger.MarkSentAsync(userId, NotificationKind.BudgetAlert, NotificationLedger.BudgetKey(7), old, default);
-        await ledger.MarkSentAsync(userId, NotificationKind.DailyReminder, NotificationLedger.DateKey(Now), Now, default);
+        await ledger.EnqueueOnceAsync(userId, NotificationKind.DailyReminder, NotificationLedger.DateKey(old), Message(userId, old), default);
+        await ledger.EnqueueOnceAsync(userId, NotificationKind.BudgetAlert, NotificationLedger.BudgetKey(7), Message(userId, old), default);
+        await ledger.EnqueueOnceAsync(userId, NotificationKind.DailyReminder, NotificationLedger.DateKey(Now), Message(userId, Now), default);
 
         var deleted = await ledger.PruneAsync(Now, default);
 
@@ -107,7 +111,7 @@ public sealed class NotificationLedgerTests : IDisposable
     [InlineData(502, false)]
     public void IsPermanentFailure_RetriesOnlyTransientErrors(int status, bool permanent)
     {
-        NotificationService.IsPermanentFailure(status).Should().Be(permanent);
+        TelegramSender.IsPermanentFailure(status).Should().Be(permanent);
     }
 
     public void Dispose() => _connection.Dispose();

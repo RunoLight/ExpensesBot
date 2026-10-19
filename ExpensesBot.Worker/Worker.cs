@@ -16,7 +16,6 @@ public class Worker(
 {
     private static readonly TimeSpan MaintenanceInterval = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan DelayBetweenMessages = TimeSpan.FromMilliseconds(100);
     private const int LongPollTimeoutSeconds = 25;
     private const string NoCategoryName = "Без категории";
 
@@ -80,7 +79,7 @@ public class Worker(
             .UpdateRatesAsync(ct);
 
         if (!string.IsNullOrWhiteSpace(botToken))
-            await SendScheduledNotificationsAsync(botToken, ct);
+            await QueueScheduledNotificationsAsync(ct);
     }
 
     /// <summary>
@@ -174,15 +173,15 @@ public class Worker(
     }
 
     /// <summary>
-    /// Sends the evening reminder, the Sunday report and budget alerts. What was
-    /// already sent is stored in the database (<see cref="NotificationLedger"/>),
-    /// so this can run every few minutes and survive restarts without duplicates.
+    /// Queues the evening reminder, the Sunday report and budget alerts in the outbox;
+    /// <see cref="OutboxDispatcher"/> delivers them. What was already queued is stored
+    /// in the database (<see cref="NotificationLedger"/>), so this can run every few
+    /// minutes and survive restarts without duplicates.
     /// </summary>
-    private async Task SendScheduledNotificationsAsync(string botToken, CancellationToken ct)
+    private async Task QueueScheduledNotificationsAsync(CancellationToken ct)
     {
         using var scope = serviceProvider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
-        var notifications = scope.ServiceProvider.GetRequiredService<NotificationService>();
         var ledger = new NotificationLedger(db);
 
         var now = DateTime.UtcNow;
@@ -207,19 +206,10 @@ public class Worker(
                     continue;
 
                 var spentMinor = await SumExpensesAsync(db, user, today, tomorrow, ct);
+                var text = NotificationTexts.DailyReminder(user.DisplayName ?? "друг", spentMinor, user.DefaultCurrency);
 
-                var settled = await notifications.SendDailyReminderAsync(
-                    botToken,
-                    user.TelegramUserId,
-                    user.DisplayName ?? "друг",
-                    spentMinor,
-                    user.DefaultCurrency,
-                    ct);
-
-                if (settled)
-                    await ledger.MarkSentAsync(user.Id, NotificationKind.DailyReminder, todayKey, now, ct);
-
-                await Task.Delay(DelayBetweenMessages, ct);
+                await ledger.EnqueueOnceAsync(user.Id, NotificationKind.DailyReminder, todayKey,
+                    OutboxMessage.Create(user.Id, NotificationTexts.DailyReminderKind, text, now), ct);
             }
 
             if (isReportDay)
@@ -247,33 +237,26 @@ public class Worker(
                         .Take(5)
                         .ToListAsync(ct);
 
-                    var settled = await notifications.SendWeeklyReportAsync(
-                        botToken,
-                        user.TelegramUserId,
+                    var text = NotificationTexts.WeeklyReport(
                         user.DisplayName ?? "друг",
                         spentMinor,
                         user.DefaultCurrency,
-                        topCategories.Select(x => (x.Name, x.Total)).ToList(),
-                        ct);
+                        topCategories.Select(x => (x.Name, x.Total)).ToList());
 
-                    if (settled)
-                        await ledger.MarkSentAsync(user.Id, NotificationKind.WeeklyReport, todayKey, now, ct);
-
-                    await Task.Delay(DelayBetweenMessages, ct);
+                    await ledger.EnqueueOnceAsync(user.Id, NotificationKind.WeeklyReport, todayKey,
+                        OutboxMessage.Create(user.Id, NotificationTexts.WeeklyReportKind, text, now), ct);
                 }
             }
 
             await ledger.PruneAsync(now, ct);
         }
 
-        await SendBudgetAlertsAsync(db, notifications, ledger, botToken, now, ct);
+        await QueueBudgetAlertsAsync(db, ledger, now, ct);
     }
 
-    private static async Task SendBudgetAlertsAsync(
+    private static async Task QueueBudgetAlertsAsync(
         ExpensesDbContext db,
-        NotificationService notifications,
         NotificationLedger ledger,
-        string botToken,
         DateTime now,
         CancellationToken ct)
     {
@@ -302,17 +285,14 @@ public class Worker(
             if (budget.AmountMinor <= 0 || spentMinor < budget.AmountMinor * 0.9m)
                 continue;
 
-            var settled = await notifications.SendBudgetAlertAsync(
-                botToken,
-                budget.User.TelegramUserId,
+            var text = NotificationTexts.BudgetAlert(
                 budget.Category?.Name ?? "Общий",
                 spentMinor,
                 budget.AmountMinor,
-                budget.Currency,
-                ct);
+                budget.Currency);
 
-            if (settled)
-                await ledger.MarkSentAsync(budget.UserId, NotificationKind.BudgetAlert, key, now, ct);
+            await ledger.EnqueueOnceAsync(budget.UserId, NotificationKind.BudgetAlert, key,
+                OutboxMessage.Create(budget.UserId, NotificationTexts.BudgetAlertKind, text, now), ct);
         }
     }
 

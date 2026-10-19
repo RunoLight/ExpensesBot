@@ -71,6 +71,7 @@ public sealed class TransactionService(ExpensesDbContext db)
         var (transaction, categoryName) = built.Value;
         transaction.IdempotencyKey = idempotencyKey;
         db.Transactions.Add(transaction);
+        await WalletNotifications.QueueTransactionAsync(db, transaction, categoryName, transaction.CreatedAtUtc, ct);
 
         try
         {

@@ -10,10 +10,11 @@ builder.Services.AddDbContext<ExpensesDbContext>(options =>
     options.UseSqlite(DatabaseConnection.Resolve(
         builder.Configuration.GetConnectionString("ExpensesDatabase"))));
 
-builder.Services.AddSingleton<NotificationService>();
+builder.Services.AddSingleton<TelegramSender>();
 builder.Services.AddSingleton<TelegramBotHandler>();
 builder.Services.AddSingleton<ExchangeRateService>();
 builder.Services.AddHostedService<Worker>();
+builder.Services.AddHostedService<OutboxDispatcher>();
 
 var host = builder.Build();
 

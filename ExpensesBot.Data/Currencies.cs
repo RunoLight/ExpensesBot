@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace ExpensesBot.Data;
 
 /// <summary>
@@ -28,4 +30,15 @@ public static class Currencies
     }
 
     public static string SupportedList => string.Join(", ", Supported);
+
+    // "12 345,67" without depending on ICU culture data being installed.
+    private static readonly NumberFormatInfo MoneyFormat = new()
+    {
+        NumberGroupSeparator = " ",
+        NumberDecimalSeparator = ","
+    };
+
+    /// <summary>Formats minor units for chat messages: "1 500,00 AMD".</summary>
+    public static string FormatMoney(long amountMinor, string currency) =>
+        $"{(amountMinor / 100m).ToString("N2", MoneyFormat)} {currency}";
 }

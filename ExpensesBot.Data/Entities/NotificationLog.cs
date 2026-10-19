@@ -30,6 +30,7 @@ public sealed class NotificationLog
     /// </summary>
     public string Key { get; set; } = string.Empty;
 
+    /// <summary>When the notification was queued in the outbox.</summary>
     public DateTime SentAtUtc { get; set; }
 
     public static string DateKey(DateTime dateUtc) =>

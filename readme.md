@@ -16,10 +16,10 @@ Built with .NET 10, ASP.NET Core Minimal APIs and EF Core.
 - **Budgets** per category or overall, with a Telegram alert at 90%.
 - **Savings goals** with contributions and progress.
 - **Recurring transactions** (daily / weekly / monthly / yearly), income or expense, executed automatically.
-- **Shared wallets** — a family budget: invite people by code or `t.me/<bot>?start=join_CODE`, record transactions into the wallet, see who spent what.
+- **Shared wallets** — a family budget: invite people by code or `t.me/<bot>?start=join_CODE`, record transactions into the wallet, see who spent what; the other members get a message about each entry.
 - **Tags**, **CSV export and import** (the export can be re-imported).
 - **Undo** — a ↩️ button under every entry recorded from the chat, and `/undo` for the latest one.
-- **Notifications** — evening reminder, weekly report, budget alerts; `/report` in chat.
+- **Notifications** — evening reminder, weekly report, budget alerts, shared-wallet entries; `/report` in chat.
 
 ## Frontend
 
@@ -66,7 +66,7 @@ flowchart LR
 | `ExpensesBot.Api` | REST API. `Authentication/` — ASP.NET Core authentication handler for Telegram `initData`; `Application/` — one service per feature (transactions, summary, budgets, goals, …) returning `Result<T>`; `Endpoints/` — thin Minimal API mappings; `Contracts/` — request/response records. Applies EF Core migrations on startup. |
 | `ExpensesBot.Client` | Blazor WebAssembly Mini App, deployed to GitHub Pages. |
 | `ExpensesBot.Data` | EF Core model, migrations, and shared rules: supported currencies, new-user defaults, database path resolution. |
-| `ExpensesBot.Worker` | Telegram bot (long polling), recurring transactions, notifications, exchange-rate updates. |
+| `ExpensesBot.Worker` | Telegram bot (long polling), recurring transactions, scheduled notifications, the outbox dispatcher, exchange-rate updates. |
 | `*.Tests` | xUnit tests: API integration tests on in-memory SQLite, bUnit component tests, Worker and Data unit tests. |
 
 ## Design decisions
@@ -81,7 +81,8 @@ flowchart LR
 - **Free-form input is a pure function.** `BotEntryParser` (regex: amount first or last, sign, currency symbol or word, `к`/`тыс` multiplier) and `CategoryGuesser` (same note before → category name in the note → keywords) have no I/O and are covered by table-driven tests.
 - **Resource-level authorization for shared wallets.** Authentication says who the user is; `WalletService` decides per wallet: non-members get 404 (existence isn't revealed), members can read and record, only the owner may rename, re-key the invite, remove members or delete (403). A transaction keeps its author as owner, so personal statistics and edit rights don't change; leaving or deleting a wallet turns its transactions back into personal ones (`ON DELETE SET NULL`). Joining is shared by the API and the bot (`WalletInvites` in the Data project).
 - **Creating a transaction is idempotent.** `POST /api/transactions` accepts an `Idempotency-Key` header. The key is stored on the transaction under a unique `(UserId, IdempotencyKey)` index: a repeated request returns the original transaction, a concurrent duplicate loses the race on the index and gets the same answer, and reusing a key for a different amount, currency, type, category or wallet is rejected with 422. The Mini App generates one key per form, so a double tap or a network retry can't record the same entry twice.
-- **Notifications are idempotent.** Every sent reminder, weekly report and budget alert is recorded in `NotificationLogs` with a unique `(UserId, Kind, Key)` index. The Worker checks it before sending, so restarts never resend a message, and only transient Telegram failures (network, 5xx, 429) are retried.
+- **Notifications go through a transactional outbox.** Nobody calls Telegram in the middle of business logic: the API and the Worker add an `OutboxMessages` row in the same `SaveChanges` as the change it is about (a wallet transaction, a reminder's `NotificationLogs` entry), so a message exists if and only if that change was committed. `OutboxDispatcher`, a separate hosted service in the Worker, delivers due messages, records each outcome right after sending, retries transient failures (network, 5xx, 429 with Telegram's `retry_after`) with exponential backoff up to 8 attempts, and drops permanent ones (bot blocked). A slow Telegram therefore never blocks the bot or an API request.
+- **Scheduled notifications are queued once.** Every reminder, weekly report and budget alert is recorded in `NotificationLogs` with a unique `(UserId, Kind, Key)` index, together with its outbox message. The Worker checks it before queueing, so restarts or a second instance never queue the same message twice.
 - **One SQLite file, two processes.** The API and the Worker share the database. Relative paths are resolved against the repository root so both open the same file, and both apply migrations at startup under EF Core's migration lock.
 
 ## Getting started
@@ -149,7 +150,7 @@ dotnet test ExpensesBot.slnx
 - **Application service tests** exercise summary math, budget and goal progress directly against a migrated in-memory SQLite database with a fixed clock.
 - **API integration tests** run the real application (`WebApplicationFactory`) against an in-memory SQLite database created from the migrations. They cover validation, per-user isolation, idempotent creation (including concurrent duplicates), currency conversion, summary math, goals, CSV export, and authentication with correctly signed, tampered, expired and foreign `initData`.
 - **Component tests** (bUnit) cover the summary card, history search/filter/sort, the edit and delete-account dialogs, shared form inputs, goal contributions and the help dialog.
-- **Worker and Data tests** cover recurrence scheduling, CBR rate parsing, bot input parsing, currency rules, and a check that the migrations match the EF model.
+- **Worker and Data tests** cover recurrence scheduling, outbox delivery, retries and backoff, CBR rate parsing, bot input parsing, currency rules, and a check that the migrations match the EF model.
 
 GitHub Actions runs build and tests on every push and pull request (`.github/workflows/ci.yml`); `deploy.yml` publishes the client to GitHub Pages.
 
@@ -181,7 +182,7 @@ In Development the OpenAPI document is served at `/openapi/v1.json`.
 - [x] Tag filters
 - [ ] Voice input — send a voice message like «потратил три тысячи на продукты»; speech-to-text, then the same parser as typed entries
 - [x] Idempotent transaction creation — an `Idempotency-Key` header so a double tap or a network retry never creates a duplicate
-- [ ] Outbox for notifications — the API and the Worker write events to a table; a separate dispatcher delivers them to Telegram with retries
+- [x] Outbox for notifications — the API and the Worker write events to a table; a separate dispatcher delivers them to Telegram with retries
 - [ ] Observability — OpenTelemetry traces and metrics, structured logging with Serilog, `/health` checking the database and Telegram (possibly via .NET Aspire)
 - [ ] Rate limiting (`AddRateLimiter`) for the API and the bot
 - [ ] API versioning and Scalar UI instead of the bare `/openapi/v1.json`
