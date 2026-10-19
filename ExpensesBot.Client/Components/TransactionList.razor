@@ -45,6 +45,10 @@
                 <div class="transaction-row__info">
                     <strong>@name</strong>
                     <div class="transaction-row__note">
+                        @if (WalletName(transaction) is { } walletName)
+                        {
+                            <span class="badge badge--pill">👥 @walletName</span>
+                        }
                         @if (!string.IsNullOrWhiteSpace(transaction.Note))
                         {
                             <span>@transaction.Note · </span>
@@ -83,6 +87,9 @@
     [Parameter] public List<TransactionDto> Transactions { get; set; } = [];
     [Parameter] public List<CategoryDto> Categories { get; set; } = [];
     [Parameter] public List<TagDto> Tags { get; set; } = [];
+
+    /// <summary>The user's shared wallets, to label transactions recorded into one.</summary>
+    [Parameter] public List<WalletDto> Wallets { get; set; } = [];
     [Parameter] public IReadOnlyList<ExchangeRateDto> Rates { get; set; } = [];
     [Parameter] public string SelectedCurrency { get; set; } = "AMD";
     [Parameter] public bool Saving { get; set; }
@@ -138,6 +145,11 @@
 
         return query.ToList();
     }
+
+    private string? WalletName(TransactionDto transaction) =>
+        transaction.WalletId is { } walletId
+            ? Wallets.FirstOrDefault(w => w.Id == walletId)?.Name ?? "общий кошелёк"
+            : null;
 
     private List<TagDto> TagsOf(TransactionDto transaction) =>
         transaction.TransactionTags is { Count: > 0 } links

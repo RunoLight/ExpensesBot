@@ -49,6 +49,17 @@
                    OnContribute="ContributeToGoalAsync"
                    OnDelete="DeleteGoalAsync" />
 
+            <Wallets Items="wallets"
+                     Saving="saving"
+                     BotUsername="@botUsername"
+                     OnCreate="CreateWalletAsync"
+                     OnJoin="JoinWalletAsync"
+                     LoadView="LoadWalletViewAsync"
+                     OnRegenerateInvite="RegenerateWalletInviteAsync"
+                     OnRemoveMember="RemoveWalletMemberAsync"
+                     OnLeave="LeaveWalletAsync"
+                     OnDelete="DeleteWalletAsync" />
+
             <Budgets Items="budgets"
                      Categories="categories"
                      Saving="saving"
@@ -59,6 +70,7 @@
             <TransactionForm Form="form"
                              Categories="categories"
                              Tags="tags"
+                             Wallets="wallets"
                              SelectedTagIds="selectedTagIds"
                              Saving="saving"
                              OnSubmit="AddTransactionAsync"
@@ -70,6 +82,7 @@
             <TransactionList Transactions="transactions"
                              Categories="categories"
                              Tags="tags"
+                             Wallets="wallets"
                              Rates="rates"
                              SelectedCurrency="@currency"
                              Saving="saving"
@@ -112,6 +125,7 @@
     [Inject] private ExpensesApiClient Api { get; set; } = null!;
     [Inject] private TelegramService Telegram { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
+    [Inject] private Microsoft.Extensions.Configuration.IConfiguration Configuration { get; set; } = null!;
 
     // Data
     private List<CategoryDto> categories = [];
@@ -121,6 +135,7 @@
     private List<GoalDto> goals = [];
     private List<TagDto> tags = [];
     private List<ExchangeRateDto> rates = [];
+    private List<WalletDto> wallets = [];
     private UserSummaryDto summary = UserSummaryDto.Empty("AMD");
 
     // View state
@@ -133,6 +148,7 @@
     private int summaryRequest;
     private bool darkTheme;
     private Dialog dialog;
+    private string? botUsername;
 
     // New transaction form and the transaction being edited
     private TransactionFormModel form = new();
@@ -145,6 +161,7 @@
         await TryJsAsync(async () => await Telegram.ReadyAsync());
         await LoadThemeAsync();
         await ApplyStartParameterAsync();
+        botUsername = Configuration["BotUsername"];
 
         try
         {
@@ -157,6 +174,10 @@
         }
 
         await LoadAsync();
+
+        // After the first load, which clears the error banner, so a failed join stays visible.
+        if (await JoinWalletFromStartParameterAsync())
+            wallets = await Api.GetWalletsAsync();
     }
 
     /// <summary>
@@ -179,9 +200,10 @@
             var goalsTask = Api.GetGoalsAsync();
             var tagsTask = Api.GetTagsAsync();
             var ratesTask = Api.GetExchangeRatesAsync();
+            var walletsTask = Api.GetWalletsAsync();
 
             await Task.WhenAll(categoriesTask, transactionsTask, summaryTask, recurringTask,
-                budgetsTask, goalsTask, tagsTask, ratesTask);
+                budgetsTask, goalsTask, tagsTask, ratesTask, walletsTask);
 
             categories = categoriesTask.Result;
             transactions = transactionsTask.Result;
@@ -192,6 +214,11 @@
             goals = goalsTask.Result;
             tags = tagsTask.Result;
             rates = ratesTask.Result;
+            wallets = walletsTask.Result;
+
+            // The wallet picked in the form may have been left or deleted.
+            if (form.WalletId is { } walletId && wallets.All(w => w.Id != walletId))
+                form.WalletId = null;
         }
         catch (Exception ex)
         {
@@ -268,10 +295,11 @@
         {
             await Api.CreateTransactionAsync(
                 amountMinor, form.Currency, form.CategoryId, form.Note, form.Type,
-                selectedTagIds.Count > 0 ? selectedTagIds.ToList() : null);
+                selectedTagIds.Count > 0 ? selectedTagIds.ToList() : null,
+                form.WalletId);
 
             selectedTagIds.Clear();
-            form = new TransactionFormModel { Currency = form.Currency, Type = form.Type };
+            form = new TransactionFormModel { Currency = form.Currency, Type = form.Type, WalletId = form.WalletId };
             await LoadAsync();
         }, "Не удалось сохранить операцию");
     }
@@ -537,6 +565,101 @@
             tags.RemoveAll(t => t.Id == id);
             selectedTagIds.Remove(id);
         }, "Не удалось удалить тег");
+
+    // Shared wallets
+
+    private async Task<bool> CreateWalletAsync(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            error = "Введите название кошелька.";
+            return false;
+        }
+
+        return await RunAsync(async () =>
+        {
+            await Api.CreateWalletAsync(name);
+            wallets = await Api.GetWalletsAsync();
+        }, "Не удалось создать кошелёк");
+    }
+
+    private async Task<bool> JoinWalletAsync(string code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            error = "Введите код приглашения.";
+            return false;
+        }
+
+        return await RunAsync(async () =>
+        {
+            await Api.JoinWalletAsync(code);
+            wallets = await Api.GetWalletsAsync();
+        }, "Не удалось присоединиться");
+    }
+
+    private async Task<WalletView?> LoadWalletViewAsync(long id)
+    {
+        try
+        {
+            return await Api.GetWalletViewAsync(id, currency);
+        }
+        catch (Exception ex)
+        {
+            error = $"Не удалось загрузить кошелёк: {ex.Message}";
+            StateHasChanged();
+            return null;
+        }
+    }
+
+    private Task<bool> RegenerateWalletInviteAsync(long id) =>
+        RunAsync(async () =>
+        {
+            await Api.RegenerateWalletInviteAsync(id);
+            wallets = await Api.GetWalletsAsync();
+        }, "Не удалось сменить код");
+
+    private Task<bool> RemoveWalletMemberAsync(WalletMemberRemoval removal) =>
+        RunAsync(async () =>
+        {
+            await Api.RemoveWalletMemberAsync(removal.WalletId, removal.UserId);
+            wallets = await Api.GetWalletsAsync();
+        }, "Не удалось исключить участника");
+
+    private Task LeaveWalletAsync(long id) =>
+        RunAsync(async () =>
+        {
+            await Api.LeaveWalletAsync(id);
+            await LoadAsync();
+        }, "Не удалось выйти из кошелька");
+
+    private Task DeleteWalletAsync(long id) =>
+        RunAsync(async () =>
+        {
+            await Api.DeleteWalletAsync(id);
+            await LoadAsync();
+        }, "Не удалось удалить кошелёк");
+
+    /// <summary>Opens the app through t.me/your_bot/app?startapp=join_ABCD2345: joins that wallet.</summary>
+    private async Task<bool> JoinWalletFromStartParameterAsync()
+    {
+        string? inviteCode = null;
+        await TryJsAsync(async () => inviteCode = await Telegram.GetStartParamAsync("join"));
+
+        if (string.IsNullOrWhiteSpace(inviteCode))
+            return false;
+
+        try
+        {
+            await Api.JoinWalletAsync(inviteCode);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = $"Не удалось присоединиться к кошельку: {ex.Message}";
+            return false;
+        }
+    }
 
     // Account
 

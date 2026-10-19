@@ -8,6 +8,9 @@ public sealed class TransactionFormModel
     public string Currency { get; set; } = "AMD";
     public string? Note { get; set; }
     public TransactionType Type { get; set; } = TransactionType.Expense;
+
+    /// <summary>Shared wallet to record into; null records a personal transaction.</summary>
+    public long? WalletId { get; set; }
 }
 
 public sealed class NewCategoryForm

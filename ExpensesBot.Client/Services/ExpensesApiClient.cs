@@ -35,6 +35,7 @@ public sealed class ExpensesApiClient(HttpClient http)
         string? note,
         TransactionType type = TransactionType.Expense,
         IEnumerable<long>? tagIds = null,
+        long? walletId = null,
         CancellationToken ct = default) =>
         SendAsync<TransactionDto>(HttpMethod.Post, "api/transactions", new
         {
@@ -44,7 +45,8 @@ public sealed class ExpensesApiClient(HttpClient http)
             OccurredAtUtc = (DateTime?)null,
             Note = note,
             Type = type,
-            TagIds = tagIds?.ToList()
+            TagIds = tagIds?.ToList(),
+            WalletId = walletId
         }, ct);
 
     public Task<TransactionDto> UpdateTransactionAsync(
@@ -227,6 +229,45 @@ public sealed class ExpensesApiClient(HttpClient http)
 
     public Task DeleteTagAsync(long id, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Delete, $"api/tags/{id}", null, ct);
+
+    // Shared wallets
+
+    public async Task<List<WalletDto>> GetWalletsAsync(CancellationToken ct = default) =>
+        await http.GetFromJsonAsync<List<WalletDto>>("api/wallets", ct) ?? [];
+
+    public Task<WalletDto> CreateWalletAsync(string name, CancellationToken ct = default) =>
+        SendAsync<WalletDto>(HttpMethod.Post, "api/wallets", new { Name = name }, ct);
+
+    public Task<WalletDto> JoinWalletAsync(string code, CancellationToken ct = default) =>
+        SendAsync<WalletDto>(HttpMethod.Post, "api/wallets/join", new { Code = code }, ct);
+
+    public Task<WalletDto> RegenerateWalletInviteAsync(long id, CancellationToken ct = default) =>
+        SendAsync<WalletDto>(HttpMethod.Post, $"api/wallets/{id}/invite", null, ct);
+
+    public Task LeaveWalletAsync(long id, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Post, $"api/wallets/{id}/leave", null, ct);
+
+    public Task DeleteWalletAsync(long id, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Delete, $"api/wallets/{id}", null, ct);
+
+    public Task RemoveWalletMemberAsync(long id, long memberUserId, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Delete, $"api/wallets/{id}/members/{memberUserId}", null, ct);
+
+    /// <summary>Members, this month's summary in <paramref name="currency"/> and the latest transactions.</summary>
+    public async Task<WalletView> GetWalletViewAsync(long id, string currency, CancellationToken ct = default)
+    {
+        var detailsTask = http.GetFromJsonAsync<WalletDetailsDto>($"api/wallets/{id}", ct);
+        var summaryTask = http.GetFromJsonAsync<WalletSummaryDto>(
+            $"api/wallets/{id}/summary?mode=month&currency={Uri.EscapeDataString(currency)}", ct);
+        var transactionsTask = http.GetFromJsonAsync<List<WalletTransactionDto>>($"api/wallets/{id}/transactions?limit=20", ct);
+
+        await Task.WhenAll(detailsTask, summaryTask, transactionsTask);
+
+        return new WalletView(
+            detailsTask.Result ?? throw new InvalidOperationException("API returned an empty response."),
+            summaryTask.Result ?? throw new InvalidOperationException("API returned an empty response."),
+            transactionsTask.Result ?? []);
+    }
 
     // Helpers
 

@@ -1,0 +1,270 @@
+<section class="panel">
+    <PanelHeader Title="Общие кошельки" AddTitle="Создать кошелёк" FormOpen="form == WalletForm.Create" OnToggleForm="() => Toggle(WalletForm.Create)">
+        <button type="button"
+                class="btn-icon @(form == WalletForm.Join ? "btn-icon--active" : null)"
+                title="Присоединиться по коду"
+                @onclick="() => Toggle(WalletForm.Join)">🔑</button>
+    </PanelHeader>
+
+    @if (form == WalletForm.Create)
+    {
+        <div class="wallet-form">
+            <label for="wallet-name">Название</label>
+            <input id="wallet-name" class="form-control" placeholder="Например, семья" @bind="name" />
+            <button type="button" class="btn btn--primary" disabled="@Saving" @onclick="CreateAsync">Создать кошелёк</button>
+        </div>
+    }
+    else if (form == WalletForm.Join)
+    {
+        <div class="wallet-form">
+            <label for="wallet-code">Код приглашения</label>
+            <input id="wallet-code" class="form-control" placeholder="ABCD2345" @bind="code" />
+            <button type="button" class="btn btn--primary" disabled="@Saving" @onclick="JoinAsync">Присоединиться</button>
+        </div>
+    }
+
+    @if (Items.Count == 0 && form == WalletForm.None)
+    {
+        <p class="muted">Общий кошелёк — для семьи, пары или соседей: операции, записанные в него, видят все участники, а сводка показывает, кто сколько потратил. Создайте кошелёк (+) или войдите по коду (🔑).</p>
+    }
+
+    @foreach (var wallet in Items)
+    {
+        <article class="list-row" @key="wallet.Id">
+            <span class="list-row__icon">👥</span>
+            <div class="list-row__body">
+                <strong>@wallet.Name</strong>
+                <span class="list-row__meta">@MembersLabel(wallet.MemberCount) · @(wallet.IsOwner ? "вы владелец" : "вы участник")</span>
+            </div>
+            <button type="button" class="btn-icon-textless btn-icon-textless--primary" @onclick="() => ToggleOpenAsync(wallet.Id)">
+                @(openId == wallet.Id ? "Скрыть" : "Открыть")
+            </button>
+        </article>
+
+        @if (openId == wallet.Id)
+        {
+            <div class="wallet-details">
+                @if (view is null)
+                {
+                    <p class="muted">Загружаем...</p>
+                }
+                else
+                {
+                    var summary = view.Summary;
+
+                    <div class="wallet-details__totals">
+                        <span>Этот месяц:</span>
+                        <span class="transaction-row__amount">−@Money.Format(summary.TotalExpenseMinor) @summary.Currency</span>
+                        <span class="transaction-row__amount transaction-row__amount--income">+@Money.Format(summary.TotalIncomeMinor) @summary.Currency</span>
+                    </div>
+                    @if (summary.UsesFallbackRates)
+                    {
+                        <p class="warning-text">Курсы приблизительные: свежих курсов ЦБ пока нет.</p>
+                    }
+
+                    <h3 class="wallet-details__title">Участники</h3>
+                    @foreach (var member in view.Details.Members)
+                    {
+                        var total = summary.ByMember.FirstOrDefault(x => x.UserId == member.UserId);
+                        <div class="wallet-member">
+                            <span>@member.DisplayName@(member.IsYou ? " (вы)" : "")@(member.Role == "Owner" ? " · владелец" : "")</span>
+                            <span class="muted">−@Money.Format(total?.ExpenseMinor ?? 0) @summary.Currency</span>
+                            @if (wallet.IsOwner && !member.IsYou)
+                            {
+                                <button type="button" class="btn-icon-textless btn-icon-textless--danger" title="Исключить" @onclick="() => ConfirmAndRemoveAsync(wallet, member)">✕</button>
+                            }
+                        </div>
+                    }
+
+                    @if (summary.ByCategory.Count > 0)
+                    {
+                        <h3 class="wallet-details__title">Расходы по категориям</h3>
+                        @foreach (var category in summary.ByCategory.Take(5))
+                        {
+                            <div class="wallet-member">
+                                <span>@category.CategoryName</span>
+                                <span class="muted">@Money.Format(category.ExpenseMinor) @summary.Currency</span>
+                            </div>
+                        }
+                    }
+
+                    @if (wallet.IsOwner && view.Details.InviteCode is { } inviteCode)
+                    {
+                        <h3 class="wallet-details__title">Приглашение</h3>
+                        <p>
+                            Код: <code class="wallet-code">@inviteCode</code>
+                            <button type="button" class="btn-icon-textless btn-icon-textless--secondary" title="Сменить код — старые ссылки перестанут работать" @onclick="() => ConfirmAndRegenerateAsync(wallet)">🔄 Новый код</button>
+                        </p>
+                        @if (InviteLink(inviteCode) is { } link)
+                        {
+                            <p class="muted">Ссылка для приглашения: <a href="@link" target="_blank" rel="noopener">@link</a></p>
+                        }
+                        else
+                        {
+                            <p class="muted">Отправьте код: его вводят здесь (🔑) или пишут боту <code>@($"/start join_{inviteCode}")</code>.</p>
+                        }
+                    }
+
+                    <h3 class="wallet-details__title">Последние операции</h3>
+                    @if (view.Transactions.Count == 0)
+                    {
+                        <p class="muted">Пока пусто. Чтобы записать операцию сюда, выберите кошелёк в форме добавления.</p>
+                    }
+                    @foreach (var transaction in view.Transactions)
+                    {
+                        <div class="wallet-member">
+                            <span>
+                                @(transaction.CategoryIcon ?? "📦") @(transaction.CategoryName ?? "Без категории")
+                                <span class="muted">· @transaction.AuthorName@(string.IsNullOrWhiteSpace(transaction.Note) ? "" : $" · {transaction.Note}")</span>
+                            </span>
+                            <strong class="transaction-row__amount @(transaction.Type == TransactionType.Income ? "transaction-row__amount--income" : null)">
+                                @Money.FormatSigned(transaction.AmountMinor, transaction.Currency, transaction.Type)
+                            </strong>
+                        </div>
+                    }
+
+                    <div class="wallet-details__actions">
+                        @if (wallet.IsOwner)
+                        {
+                            <button type="button" class="btn btn--danger btn--small" disabled="@Saving" @onclick="() => ConfirmAndDeleteAsync(wallet)">Удалить кошелёк</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn--secondary btn--small" disabled="@Saving" @onclick="() => ConfirmAndLeaveAsync(wallet)">Выйти из кошелька</button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    }
+</section>
+
+@code {
+    private enum WalletForm { None, Create, Join }
+
+    [Parameter] public List<WalletDto> Items { get; set; } = [];
+    [Parameter] public bool Saving { get; set; }
+
+    /// <summary>Bot username for t.me invite links; without it only the code is shown.</summary>
+    [Parameter] public string? BotUsername { get; set; }
+
+    /// <summary>Creates a wallet with this name; true on success.</summary>
+    [Parameter] public Func<string, Task<bool>> OnCreate { get; set; } = _ => Task.FromResult(false);
+
+    /// <summary>Joins the wallet with this invite code; true on success.</summary>
+    [Parameter] public Func<string, Task<bool>> OnJoin { get; set; } = _ => Task.FromResult(false);
+
+    /// <summary>Loads members, summary and recent transactions of a wallet; null on error.</summary>
+    [Parameter] public Func<long, Task<WalletView?>> LoadView { get; set; } = _ => Task.FromResult<WalletView?>(null);
+
+    [Parameter] public Func<long, Task<bool>> OnRegenerateInvite { get; set; } = _ => Task.FromResult(false);
+    [Parameter] public Func<WalletMemberRemoval, Task<bool>> OnRemoveMember { get; set; } = _ => Task.FromResult(false);
+    [Parameter] public EventCallback<long> OnLeave { get; set; }
+    [Parameter] public EventCallback<long> OnDelete { get; set; }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private WalletForm form;
+    private string name = "";
+    private string code = "";
+    private long? openId;
+    private WalletView? view;
+
+    private void Toggle(WalletForm kind) => form = form == kind ? WalletForm.None : kind;
+
+    private async Task CreateAsync()
+    {
+        if (await OnCreate(name))
+        {
+            name = "";
+            form = WalletForm.None;
+        }
+    }
+
+    private async Task JoinAsync()
+    {
+        if (await OnJoin(code))
+        {
+            code = "";
+            form = WalletForm.None;
+        }
+    }
+
+    private async Task ToggleOpenAsync(long walletId)
+    {
+        if (openId == walletId)
+        {
+            openId = null;
+            view = null;
+            return;
+        }
+
+        openId = walletId;
+        await ReloadViewAsync();
+    }
+
+    private async Task ReloadViewAsync()
+    {
+        if (openId is not { } walletId)
+            return;
+
+        view = null;
+        var loaded = await LoadView(walletId);
+
+        // The user may have opened another wallet meanwhile.
+        if (openId == walletId)
+            view = loaded;
+    }
+
+    private async Task ConfirmAndRegenerateAsync(WalletDto wallet)
+    {
+        if (await JS.ConfirmAsync($"Сменить код кошелька «{wallet.Name}»? Старые приглашения перестанут работать.") &&
+            await OnRegenerateInvite(wallet.Id))
+        {
+            await ReloadViewAsync();
+        }
+    }
+
+    private async Task ConfirmAndRemoveAsync(WalletDto wallet, WalletMemberDto member)
+    {
+        var message = $"Исключить {member.DisplayName} из «{wallet.Name}»? Его операции останутся у него как личные.";
+        if (await JS.ConfirmAsync(message) && await OnRemoveMember(new WalletMemberRemoval(wallet.Id, member.UserId)))
+            await ReloadViewAsync();
+    }
+
+    private async Task ConfirmAndLeaveAsync(WalletDto wallet)
+    {
+        if (!await JS.ConfirmAsync($"Выйти из «{wallet.Name}»? Ваши операции в нём станут личными."))
+            return;
+
+        openId = null;
+        view = null;
+        await OnLeave.InvokeAsync(wallet.Id);
+    }
+
+    private async Task ConfirmAndDeleteAsync(WalletDto wallet)
+    {
+        if (!await JS.ConfirmAsync($"Удалить кошелёк «{wallet.Name}»? Операции участников сохранятся у них как личные."))
+            return;
+
+        openId = null;
+        view = null;
+        await OnDelete.InvokeAsync(wallet.Id);
+    }
+
+    private string? InviteLink(string inviteCode) =>
+        string.IsNullOrWhiteSpace(BotUsername)
+            ? null
+            : $"https://t.me/{BotUsername.TrimStart('@')}?start=join_{inviteCode}";
+
+    public static string MembersLabel(int count)
+    {
+        var lastTwo = count % 100;
+        var last = count % 10;
+        var word = lastTwo is >= 11 and <= 14 ? "участников"
+            : last == 1 ? "участник"
+            : last is >= 2 and <= 4 ? "участника"
+            : "участников";
+        return $"{count} {word}";
+    }
+}

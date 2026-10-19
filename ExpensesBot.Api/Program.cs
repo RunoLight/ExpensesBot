@@ -35,6 +35,7 @@ builder.Services.AddScoped<GoalService>();
 builder.Services.AddScoped<RecurringTransactionService>();
 builder.Services.AddScoped<TagService>();
 builder.Services.AddScoped<ProfileService>();
+builder.Services.AddScoped<WalletService>();
 
 var allowedOrigins = builder.Configuration
     .GetSection("Cors:AllowedOrigins")
@@ -78,6 +79,7 @@ app.MapGoalsEndpoints();
 app.MapExchangeEndpoints();
 app.MapProfileEndpoints();
 app.MapTagEndpoints();
+app.MapWalletsEndpoints();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 

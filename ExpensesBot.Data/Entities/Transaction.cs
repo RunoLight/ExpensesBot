@@ -31,5 +31,10 @@ public sealed class Transaction
 
     public string? Note { get; set; }
 
+    /// <summary>Shared wallet the transaction was recorded into, if any.</summary>
+    public long? WalletId { get; set; }
+
+    public Wallet? Wallet { get; set; }
+
     public List<TransactionTag> TransactionTags { get; set; } = [];
 }

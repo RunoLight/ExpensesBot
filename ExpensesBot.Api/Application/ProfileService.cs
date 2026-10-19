@@ -1,6 +1,7 @@
 using ExpensesBot.Api.Common;
 using ExpensesBot.Api.Contracts.Profile;
 using ExpensesBot.Data;
+using ExpensesBot.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExpensesBot.Api.Application;
@@ -36,14 +37,24 @@ public sealed class ProfileService(ExpensesDbContext db)
     }
 
     /// <summary>
-    /// Deletes the user. Categories, transactions, budgets, goals, tags and
-    /// recurring rules go with it through ON DELETE CASCADE foreign keys.
+    /// Deletes the user. Categories, transactions, budgets, goals, tags,
+    /// recurring rules and wallet memberships go with it through ON DELETE
+    /// CASCADE foreign keys. Wallets the user owns are deleted too (nobody
+    /// could manage them otherwise); other members keep their transactions.
     /// </summary>
     public async Task<Result> DeleteAccountAsync(long userId, CancellationToken ct)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        await db.Wallets
+            .Where(w => w.Members.Any(m => m.UserId == userId && m.Role == WalletRole.Owner))
+            .ExecuteDeleteAsync(ct);
+
         var deleted = await db.Users
             .Where(x => x.Id == userId)
             .ExecuteDeleteAsync(ct);
+
+        await transaction.CommitAsync(ct);
 
         return deleted == 0 ? Error.NotFound() : Result.Success();
     }

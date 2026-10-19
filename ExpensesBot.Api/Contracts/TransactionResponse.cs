@@ -14,7 +14,8 @@ public sealed record TransactionResponse(
     DateTime CreatedAtUtc,
     string? Note,
     TransactionType Type,
-    List<TransactionTagResponse> TransactionTags);
+    List<TransactionTagResponse> TransactionTags,
+    long? WalletId = null);
 
 public sealed record BulkError(
     int Index,

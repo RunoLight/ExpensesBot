@@ -16,6 +16,21 @@
         <label for="category">Категория</label>
         <CategorySelect Id="category" Categories="Categories" @bind-Value="Form.CategoryId" />
 
+        @if (Wallets.Count > 0)
+        {
+            <label for="wallet">Куда записать</label>
+            <select id="wallet"
+                    class="form-control"
+                    value="@(Form.WalletId?.ToString() ?? "")"
+                    @onchange="e => Form.WalletId = long.TryParse(e.Value?.ToString(), out var id) ? id : null">
+                <option value="">👤 Личная операция</option>
+                @foreach (var wallet in Wallets)
+                {
+                    <option value="@wallet.Id">👥 @wallet.Name</option>
+                }
+            </select>
+        }
+
         <label for="note">Комментарий</label>
         <InputText id="note" class="form-control" @bind-Value="Form.Note" placeholder="Например, обед" />
 
@@ -37,6 +52,7 @@
     [Parameter, EditorRequired] public TransactionFormModel Form { get; set; } = new();
     [Parameter] public List<CategoryDto> Categories { get; set; } = [];
     [Parameter] public List<TagDto> Tags { get; set; } = [];
+    [Parameter] public List<WalletDto> Wallets { get; set; } = [];
     [Parameter] public HashSet<long> SelectedTagIds { get; set; } = [];
     [Parameter] public bool Saving { get; set; }
 

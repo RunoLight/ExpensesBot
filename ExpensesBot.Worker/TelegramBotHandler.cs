@@ -75,7 +75,11 @@ public sealed class TelegramBotHandler(
         switch (command)
         {
             case "/start":
-                await SendStartMessageAsync(botToken, chatId.Value, firstName, ct);
+                // t.me/<bot>?start=join_CODE arrives as "/start join_CODE".
+                if (TryReadJoinCode(text, out var inviteCode) && telegramUserId.HasValue)
+                    await JoinWalletAsync(botToken, chatId.Value, telegramUserId.Value, firstName, inviteCode, ct);
+                else
+                    await SendStartMessageAsync(botToken, chatId.Value, firstName, ct);
                 return true;
 
             case "/expenses":
@@ -115,6 +119,42 @@ public sealed class TelegramBotHandler(
         }
 
         return false;
+    }
+
+    /// <summary>The invite code from "/start join_ABCD2345".</summary>
+    public static bool TryReadJoinCode(string text, out string code)
+    {
+        var parts = text.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        code = parts.Length == 2 && parts[1].StartsWith(WalletInvites.DeepLinkPrefix, StringComparison.Ordinal)
+            ? parts[1][WalletInvites.DeepLinkPrefix.Length..]
+            : string.Empty;
+
+        return WalletInvites.Normalize(code) is not null;
+    }
+
+    private async Task JoinWalletAsync(
+        string botToken, long chatId, long telegramUserId, string? firstName, string code, CancellationToken ct)
+    {
+        var user = await GetOrCreateUserAsync(telegramUserId, firstName, ct);
+
+        await using var scope = serviceProvider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
+
+        var result = await WalletInvites.JoinAsync(db, user.Id, code, DateTime.UtcNow, ct);
+
+        var text = result.Status switch
+        {
+            JoinWalletStatus.Joined =>
+                $"👥 Вы присоединились к общему кошельку «{result.Wallet!.Name}».\n\n" +
+                "Операции, записанные в него, видят все участники. Выбрать кошелёк при записи и посмотреть общую сводку можно в приложении.",
+            JoinWalletStatus.AlreadyMember =>
+                $"Вы уже участник кошелька «{result.Wallet!.Name}».",
+            JoinWalletStatus.Full =>
+                $"В кошельке «{result.Wallet!.Name}» уже {WalletInvites.MaxMembers} участников — больше добавить нельзя.",
+            _ => "Приглашение не найдено: возможно, владелец сменил код. Попросите новую ссылку."
+        };
+
+        await SendWebAppMessageAsync(botToken, chatId, text, "👥 Открыть кошельки", WebAppUrl, ct);
     }
 
     /// <summary>A bare amount ("1 500,50") or a free-form entry ("1500 кофе", "+20$ возврат").</summary>

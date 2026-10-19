@@ -16,4 +16,5 @@ public sealed record TransactionDto(
     DateTime CreatedAtUtc,
     string? Note,
     TransactionType Type,
-    List<TransactionTagDto>? TransactionTags = null);
+    List<TransactionTagDto>? TransactionTags = null,
+    long? WalletId = null);

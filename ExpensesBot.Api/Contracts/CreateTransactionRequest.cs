@@ -13,7 +13,8 @@ public sealed record CreateTransactionRequest(
     DateTime? OccurredAtUtc,
     string? Note,
     TransactionType Type = TransactionType.Expense,
-    List<long>? TagIds = null);
+    List<long>? TagIds = null,
+    long? WalletId = null);
 
 public sealed record UpdateTransactionRequest(
     long AmountMinor,

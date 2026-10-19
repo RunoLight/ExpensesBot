@@ -16,6 +16,7 @@ Built with .NET 10, ASP.NET Core Minimal APIs and EF Core.
 - **Budgets** per category or overall, with a Telegram alert at 90%.
 - **Savings goals** with contributions and progress.
 - **Recurring transactions** (daily / weekly / monthly / yearly), income or expense, executed automatically.
+- **Shared wallets** — a family budget: invite people by code or `t.me/<bot>?start=join_CODE`, record transactions into the wallet, see who spent what.
 - **Tags**, **CSV export and import** (the export can be re-imported).
 - **Undo** — a ↩️ button under every entry recorded from the chat, and `/undo` for the latest one.
 - **Notifications** — evening reminder, weekly report, budget alerts; `/report` in chat.
@@ -78,6 +79,7 @@ flowchart LR
 - **Cross-currency totals are converted, never summed raw.** The summary endpoint converts every transaction into the requested display currency using the latest stored rates (with clearly flagged fallback rates if none are stored yet).
 - **The bot is stateless.** One handler serves every chat, so type, amount, currency and category travel inside the button's `callback_data` (`tx:e:1500:AMD:12`, at most 64 bytes). The note doesn't fit, so the bot's question is sent as a reply to the user's message and the handler re-parses the note from `reply_to_message`. The confirmation message is edited after recording, so a second tap can't create a duplicate.
 - **Free-form input is a pure function.** `BotEntryParser` (regex: amount first or last, sign, currency symbol or word, `к`/`тыс` multiplier) and `CategoryGuesser` (same note before → category name in the note → keywords) have no I/O and are covered by table-driven tests.
+- **Resource-level authorization for shared wallets.** Authentication says who the user is; `WalletService` decides per wallet: non-members get 404 (existence isn't revealed), members can read and record, only the owner may rename, re-key the invite, remove members or delete (403). A transaction keeps its author as owner, so personal statistics and edit rights don't change; leaving or deleting a wallet turns its transactions back into personal ones (`ON DELETE SET NULL`). Joining is shared by the API and the bot (`WalletInvites` in the Data project).
 - **Notifications are idempotent.** Every sent reminder, weekly report and budget alert is recorded in `NotificationLogs` with a unique `(UserId, Kind, Key)` index. The Worker checks it before sending, so restarts never resend a message, and only transient Telegram failures (network, 5xx, 429) are retried.
 - **One SQLite file, two processes.** The API and the Worker share the database. Relative paths are resolved against the repository root so both open the same file, and both apply migrations at startup under EF Core's migration lock.
 
@@ -99,6 +101,7 @@ flowchart LR
 | `Telegram:InitDataMaxAgeHours` | API | `24` | How long a Mini App session stays valid. |
 | `Cors:AllowedOrigins` | API | GitHub Pages origin | Add the origin the client is served from. |
 | `ApiBaseUrl` (`Client/wwwroot/appsettings*.json`) | Client | `http://localhost:5069/` in Development | Public URL of the API for the deployed client. |
+| `BotUsername` (`Client/wwwroot/appsettings.json`) | Client | empty | Bot username for `t.me/<bot>?start=join_CODE` wallet invite links; without it the app shows only the code. |
 
 ```bash
 # API and Worker share one user-secrets store, so this configures both
@@ -164,6 +167,8 @@ GitHub Actions runs build and tests on every push and pull request (`.github/wor
 | GET/POST/PUT/DELETE | `/api/tags[/{id}]` | Tags |
 | GET/PUT/DELETE | `/api/profile`, `/api/profile/currency` | Profile, default currency, account deletion |
 | GET/POST | `/api/exchange/rates`, `/api/exchange/convert` | Exchange rates |
+| GET/POST/PUT/DELETE | `/api/wallets[/{id}]`, `POST /join`, `POST /{id}/invite`, `POST /{id}/leave`, `DELETE /{id}/members/{userId}` | Shared wallets and membership |
+| GET | `/api/wallets/{id}/transactions`, `/api/wallets/{id}/summary` | Wallet transactions with authors; totals per member and category |
 
 In Development the OpenAPI document is served at `/openapi/v1.json`.
 

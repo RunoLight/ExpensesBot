@@ -1224,3 +1224,54 @@ label,
         color: #f87171;
     }
 }
+
+/* Shared wallets */
+
+.wallet-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.wallet-details {
+    margin: 0 0 12px 42px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: var(--color-surface-alt);
+}
+
+.wallet-details__totals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: baseline;
+}
+
+.wallet-details__title {
+    margin: 14px 0 6px;
+    font-size: var(--fs-md);
+}
+
+.wallet-member {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.wallet-member > span:first-child {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.wallet-code {
+    font-size: 1.1em;
+    letter-spacing: 0.1em;
+}
+
+.wallet-details__actions {
+    margin-top: 12px;
+}

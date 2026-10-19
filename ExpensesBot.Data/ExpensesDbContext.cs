@@ -17,6 +17,8 @@ public sealed class ExpensesDbContext(
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<TransactionTag> TransactionTags => Set<TransactionTag>();
     public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
+    public DbSet<Wallet> Wallets => Set<Wallet>();
+    public DbSet<WalletMember> WalletMembers => Set<WalletMember>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -149,5 +151,39 @@ public sealed class ExpensesDbContext(
         modelBuilder.Entity<NotificationLog>()
             .HasIndex(x => new { x.UserId, x.Kind, x.Key })
             .IsUnique();
+
+        modelBuilder.Entity<Wallet>()
+            .Property(x => x.Name)
+            .HasMaxLength(80);
+
+        modelBuilder.Entity<Wallet>()
+            .Property(x => x.InviteCode)
+            .HasMaxLength(16);
+
+        modelBuilder.Entity<Wallet>()
+            .HasIndex(x => x.InviteCode)
+            .IsUnique();
+
+        modelBuilder.Entity<WalletMember>()
+            .HasKey(x => new { x.WalletId, x.UserId });
+
+        modelBuilder.Entity<WalletMember>()
+            .HasOne(x => x.Wallet)
+            .WithMany(x => x.Members)
+            .HasForeignKey(x => x.WalletId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<WalletMember>()
+            .HasOne(x => x.User)
+            .WithMany()
+            .HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Deleting a wallet keeps the members' transactions as personal ones.
+        modelBuilder.Entity<Transaction>()
+            .HasOne(x => x.Wallet)
+            .WithMany()
+            .HasForeignKey(x => x.WalletId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

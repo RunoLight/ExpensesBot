@@ -388,6 +388,66 @@ public class TagSelectorTests : BunitContext
     }
 }
 
+public class WalletsTests : BunitContext
+{
+    [Theory]
+    [InlineData(1, "1 участник")]
+    [InlineData(3, "3 участника")]
+    [InlineData(5, "5 участников")]
+    [InlineData(11, "11 участников")]
+    [InlineData(21, "21 участник")]
+    public void MembersLabel_UsesRussianPlurals(int count, string expected)
+    {
+        Wallets.MembersLabel(count).Should().Be(expected);
+    }
+
+    [Fact]
+    public void OpeningAWallet_ShowsMembersSpendingAndOwnerInvite()
+    {
+        var wallet = new WalletDto(4, "Семья", "Owner", 2, "ABCD2345", DateTime.UtcNow);
+        var view = new WalletView(
+            new WalletDetailsDto(4, "Семья", "Owner", "ABCD2345", DateTime.UtcNow,
+            [
+                new(1, "Анна", "Owner", DateTime.UtcNow, true),
+                new(2, "Борис", "Member", DateTime.UtcNow, false)
+            ]),
+            new WalletSummaryDto("AMD", "month", 0, 40_000, -40_000,
+                [new(1, "Анна", 0, 30_000, 1), new(2, "Борис", 0, 10_000, 1)], [], false),
+            []);
+
+        var cut = Render<Wallets>(p => p
+            .Add(x => x.Items, new List<WalletDto> { wallet })
+            .Add(x => x.BotUsername, "@my_expenses_bot")
+            .Add(x => x.LoadView, _ => Task.FromResult<WalletView?>(view)));
+
+        cut.Find(".list-row button").Click();
+
+        cut.Markup.Should().Contain("Борис").And.Contain("Анна (вы)");
+        cut.Find(".wallet-code").TextContent.Should().Be("ABCD2345");
+        cut.Markup.Should().Contain("https://t.me/my_expenses_bot?start=join_ABCD2345");
+        cut.FindAll("button[title='Исключить']").Should().ContainSingle("the owner can remove others but not themselves");
+    }
+
+    [Fact]
+    public void Members_SeeLeaveInsteadOfDelete()
+    {
+        var wallet = new WalletDto(4, "Семья", "Member", 2, null, DateTime.UtcNow);
+        var view = new WalletView(
+            new WalletDetailsDto(4, "Семья", "Member", null, DateTime.UtcNow, [new(2, "Борис", "Member", DateTime.UtcNow, true)]),
+            new WalletSummaryDto("AMD", "month", 0, 0, 0, [], [], false),
+            []);
+
+        var cut = Render<Wallets>(p => p
+            .Add(x => x.Items, new List<WalletDto> { wallet })
+            .Add(x => x.LoadView, _ => Task.FromResult<WalletView?>(view)));
+
+        cut.Find(".list-row button").Click();
+
+        cut.Markup.Should().Contain("Выйти из кошелька").And.NotContain("Удалить кошелёк");
+        cut.FindAll(".wallet-code").Should().BeEmpty();
+    }
+}
+
 public class HelpModalTests : BunitContext
 {
     [Fact]

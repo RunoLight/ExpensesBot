@@ -4,7 +4,8 @@ public enum ErrorKind
 {
     Validation,
     NotFound,
-    Conflict
+    Conflict,
+    Forbidden
 }
 
 /// <summary>An expected failure of a business operation (not an exception).</summary>
@@ -15,6 +16,9 @@ public sealed record Error(ErrorKind Kind, string Message)
     public static Error NotFound(string message = "Not found.") => new(ErrorKind.NotFound, message);
 
     public static Error Conflict(string message) => new(ErrorKind.Conflict, message);
+
+    /// <summary>The caller can see the resource but may not do this (e.g. a member managing a wallet).</summary>
+    public static Error Forbidden(string message) => new(ErrorKind.Forbidden, message);
 }
 
 /// <summary>Outcome of an operation that returns nothing on success.</summary>

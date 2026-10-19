@@ -297,9 +297,14 @@ namespace ExpensesBot.Data.Migrations
                     b.Property<long>("UserId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("WalletId")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("WalletId");
 
                     b.HasIndex("UserId", "OccurredAtUtc");
 
@@ -347,6 +352,54 @@ namespace ExpensesBot.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("ExpensesBot.Data.Entities.Wallet", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InviteCode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InviteCode")
+                        .IsUnique();
+
+                    b.ToTable("Wallets");
+                });
+
+            modelBuilder.Entity("ExpensesBot.Data.Entities.WalletMember", b =>
+                {
+                    b.Property<long>("WalletId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("JoinedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("WalletId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("WalletMembers");
                 });
 
             modelBuilder.Entity("ExpensesBot.Data.Entities.Budget", b =>
@@ -449,9 +502,16 @@ namespace ExpensesBot.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("ExpensesBot.Data.Entities.Wallet", "Wallet")
+                        .WithMany()
+                        .HasForeignKey("WalletId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Category");
 
                     b.Navigation("User");
+
+                    b.Navigation("Wallet");
                 });
 
             modelBuilder.Entity("ExpensesBot.Data.Entities.TransactionTag", b =>
@@ -473,6 +533,25 @@ namespace ExpensesBot.Data.Migrations
                     b.Navigation("Transaction");
                 });
 
+            modelBuilder.Entity("ExpensesBot.Data.Entities.WalletMember", b =>
+                {
+                    b.HasOne("ExpensesBot.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ExpensesBot.Data.Entities.Wallet", "Wallet")
+                        .WithMany("Members")
+                        .HasForeignKey("WalletId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+
+                    b.Navigation("Wallet");
+                });
+
             modelBuilder.Entity("ExpensesBot.Data.Entities.Tag", b =>
                 {
                     b.Navigation("TransactionTags");
@@ -492,6 +571,11 @@ namespace ExpensesBot.Data.Migrations
                     b.Navigation("RecurringTransactions");
 
                     b.Navigation("Transactions");
+                });
+
+            modelBuilder.Entity("ExpensesBot.Data.Entities.Wallet", b =>
+                {
+                    b.Navigation("Members");
                 });
 #pragma warning restore 612, 618
         }

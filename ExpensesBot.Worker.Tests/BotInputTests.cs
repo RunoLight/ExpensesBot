@@ -200,3 +200,18 @@ public class RecordCallbackTests
         request.Should().Be(new RecordCallback(TransactionType.Expense, 250m));
     }
 }
+
+public class JoinLinkTests
+{
+    [Theory]
+    [InlineData("/start join_ABCD2345", true, "ABCD2345")]
+    [InlineData("/start join_abcd2345", true, "abcd2345")]
+    [InlineData("/start", false, "")]
+    [InlineData("/start expense_1500", false, "")]
+    [InlineData("/start join_SHORT", false, "SHORT")]
+    public void TryReadJoinCode_AcceptsOnlyWellFormedCodes(string text, bool valid, string code)
+    {
+        TelegramBotHandler.TryReadJoinCode(text, out var parsed).Should().Be(valid);
+        parsed.Should().Be(code);
+    }
+}

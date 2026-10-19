@@ -18,6 +18,7 @@ public static class ResultHttpExtensions
         {
             ErrorKind.NotFound => (StatusCodes.Status404NotFound, "Not found"),
             ErrorKind.Conflict => (StatusCodes.Status409Conflict, "Conflict"),
+            ErrorKind.Forbidden => (StatusCodes.Status403Forbidden, "Forbidden"),
             _ => (StatusCodes.Status400BadRequest, "Invalid request")
         };
 

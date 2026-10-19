@@ -225,6 +225,13 @@ public sealed class TransactionService(ExpensesDbContext db)
                 return Error.Validation("Category does not exist or is unavailable.");
         }
 
+        // Recording into a shared wallet requires being its member.
+        if (request.WalletId is { } walletId &&
+            !await db.WalletMembers.AnyAsync(m => m.WalletId == walletId && m.UserId == userId, ct))
+        {
+            return Error.Validation("Wallet does not exist or you are not its member.");
+        }
+
         var transaction = new Transaction
         {
             UserId = userId,
@@ -234,7 +241,8 @@ public sealed class TransactionService(ExpensesDbContext db)
             OccurredAtUtc = DateTime.SpecifyKind(occurredAt, DateTimeKind.Utc),
             CreatedAtUtc = DateTime.UtcNow,
             Note = note,
-            Type = (EntityTransactionType)request.Type
+            Type = (EntityTransactionType)request.Type,
+            WalletId = request.WalletId
         };
 
         if (request.TagIds is { Count: > 0 })
@@ -263,7 +271,8 @@ public sealed class TransactionService(ExpensesDbContext db)
             (ContractTransactionType)x.Type,
             x.TransactionTags
                 .Select(tt => new TransactionTagResponse(tt.TransactionId, tt.TagId))
-                .ToList()));
+                .ToList(),
+            x.WalletId));
 
     private static TransactionResponse ToResponse(Transaction transaction, string? categoryName) =>
         new(
@@ -278,7 +287,8 @@ public sealed class TransactionService(ExpensesDbContext db)
             (ContractTransactionType)transaction.Type,
             transaction.TransactionTags
                 .Select(tt => new TransactionTagResponse(transaction.Id, tt.TagId))
-                .ToList());
+                .ToList(),
+            transaction.WalletId);
 
     /// <summary>
     /// Quotes a CSV field and neutralises spreadsheet formulas
