@@ -4,26 +4,26 @@
 
         <div class="form-row">
             <div class="form-group">
-                <label for="amount">Сумма</label>
+                <label for="amount">@T.Amount</label>
                 <InputNumber id="amount" class="form-control" @bind-Value="Form.Amount" />
             </div>
             <div class="form-group">
-                <label for="currency">Валюта</label>
+                <label for="currency">@T.Currency</label>
                 <CurrencySelect Id="currency" @bind-Value="Form.Currency" />
             </div>
         </div>
 
-        <label for="category">Категория</label>
+        <label for="category">@T.Category</label>
         <CategorySelect Id="category" Categories="Categories" @bind-Value="Form.CategoryId" />
 
         @if (Wallets.Count > 0)
         {
-            <label for="wallet">Куда записать</label>
+            <label for="wallet">@T.RecordInto</label>
             <select id="wallet"
                     class="form-control"
                     value="@(Form.WalletId?.ToString() ?? "")"
                     @onchange="e => Form.WalletId = long.TryParse(e.Value?.ToString(), out var id) ? id : null">
-                <option value="">👤 Личная операция</option>
+                <option value="">@T.PersonalTransaction</option>
                 @foreach (var wallet in Wallets)
                 {
                     <option value="@wallet.Id">👥 @wallet.Name</option>
@@ -31,8 +31,8 @@
             </select>
         }
 
-        <label for="note">Комментарий</label>
-        <InputText id="note" class="form-control" @bind-Value="Form.Note" placeholder="Например, обед" />
+        <label for="note">@T.Note</label>
+        <InputText id="note" class="form-control" @bind-Value="Form.Note" placeholder="@T.NotePlaceholder" />
 
         <TagSelector Tags="Tags"
                      SelectedTagIds="SelectedTagIds"
@@ -43,12 +43,13 @@
                      OnDeleteTag="OnDeleteTag" />
 
         <button class="btn btn--primary" type="submit" disabled="@Saving">
-            @(Saving ? "Сохраняем..." : Form.Type == TransactionType.Income ? "Добавить доход" : "Добавить расход")
+            @(Saving ? T.Saving : Form.Type == TransactionType.Income ? T.AddIncome : T.AddExpense)
         </button>
     </EditForm>
 </section>
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter, EditorRequired] public TransactionFormModel Form { get; set; } = new();
     [Parameter] public List<CategoryDto> Categories { get; set; } = [];
     [Parameter] public List<TagDto> Tags { get; set; } = [];

@@ -58,7 +58,8 @@ public sealed class BotUndoTests : IDisposable
         var last = await BotUndo.FindLastAsync(db, telegramUserId: 100, default);
 
         last!.Note.Should().Be("second");
-        last.Describe().Should().Contain("20,00 AMD").And.Contain("second").And.StartWith("➖");
+        last.Describe(BotText.Ru).Should().Contain("20,00 AMD").And.Contain("second").And.StartWith("➖");
+        last.Describe(BotText.En).Should().Contain("20.00 AMD");
     }
 
     [Fact]

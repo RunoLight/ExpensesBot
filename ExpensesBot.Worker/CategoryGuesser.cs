@@ -3,21 +3,26 @@ namespace ExpensesBot.Worker;
 public sealed record CategoryOption(long Id, string Name, string? Icon);
 
 /// <summary>
-/// Picks a likely category for a note written in the chat ("кофе", "такси до
-/// аэропорта"). In order: the category the user chose last time for the same
+/// Picks a likely category for a note written in the chat ("coffee", "taxi to the
+/// airport", "такси до аэропорта"). In order: the category the user chose last time for the same
 /// note, a category whose name appears in the note, then common keywords for
 /// the default categories.
 /// </summary>
 public static class CategoryGuesser
 {
-    // Keywords for the categories every new user gets (see UserFactory).
+    // Keywords for the categories every new user gets, in both languages (see MessageText.DefaultCategories).
     private static readonly Dictionary<string, string[]> Keywords = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Продукты"] = ["продукт", "магазин", "супермаркет", "овощ", "фрукт", "хлеб", "молоко"],
         ["Транспорт"] = ["такси", "метро", "автобус", "бензин", "заправк", "парковк", "проезд", "поезд"],
         ["Дом"] = ["аренд", "квартир", "коммунал", "свет", "интернет", "ремонт"],
         ["Кафе"] = ["кафе", "кофе", "ресторан", "обед", "ужин", "завтрак", "бар", "пицц", "доставк"],
-        ["Зарплата"] = ["зарплат", "зп", "аванс", "преми"]
+        ["Зарплата"] = ["зарплат", "зп", "аванс", "преми"],
+        ["Groceries"] = ["grocer", "supermarket", "market", "vegetable", "fruit", "bread", "milk", "food"],
+        ["Transport"] = ["taxi", "uber", "metro", "subway", "bus", "fuel", "gas", "petrol", "parking", "train", "ticket"],
+        ["Home"] = ["rent", "flat", "apartment", "utilit", "electric", "internet", "repair"],
+        ["Cafe"] = ["cafe", "coffee", "restaurant", "lunch", "dinner", "breakfast", "bar", "pizza", "delivery"],
+        ["Salary"] = ["salary", "paycheck", "wage", "bonus", "advance"]
     };
 
     /// <param name="note">The note from the chat message.</param>

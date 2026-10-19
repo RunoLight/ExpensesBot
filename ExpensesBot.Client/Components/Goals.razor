@@ -1,5 +1,5 @@
 <section class="panel">
-    <PanelHeader Title="Цели" AddTitle="Новая цель" FormOpen="showForm" OnToggleForm="ToggleForm" />
+    <PanelHeader Title="@T.Goals" AddTitle="@T.NewGoal" FormOpen="showForm" OnToggleForm="ToggleForm" />
 
     @foreach (var goal in Items.Where(g => g.IsActive))
     {
@@ -13,7 +13,7 @@
             <Footer>
                 @if (goal.TargetDateUtc.HasValue)
                 {
-                    <span>до @goal.TargetDateUtc.Value.ToString("dd.MM.yyyy")</span>
+                    <span>@T.Until(goal.TargetDateUtc.Value)</span>
                 }
             </Footer>
             <ChildContent>
@@ -22,13 +22,13 @@
                            class="form-control"
                            min="0"
                            step="any"
-                           placeholder="Сумма, @goal.Currency"
+                           placeholder="@T.AmountIn(goal.Currency)"
                            value="@DraftText(goal.Id)"
                            @onchange="e => SetContribution(goal.Id, e.Value)" />
                     <button type="button"
                             class="btn btn--small"
                             disabled="@(Saving || !contributions.ContainsKey(goal.Id))"
-                            @onclick="() => ConfirmAndContributeAsync(goal)">➕ Внести</button>
+                            @onclick="() => ConfirmAndContributeAsync(goal)">@T.Contribute</button>
                 </div>
             </ChildContent>
         </ProgressCard>
@@ -37,18 +37,18 @@
     @if (showForm)
     {
         <EditForm Model="form" OnValidSubmit="SubmitAsync">
-            <label for="goal-name">Название цели</label>
-            <InputText id="goal-name" class="form-control" @bind-Value="form.Name" placeholder="Например, новый телефон" />
+            <label for="goal-name">@T.GoalName</label>
+            <InputText id="goal-name" class="form-control" @bind-Value="form.Name" placeholder="@T.GoalNamePlaceholder" />
 
             <div class="form-row">
                 <div class="form-group">
-                    <label for="goal-target">Целевая сумма</label>
+                    <label for="goal-target">@T.TargetAmount</label>
                     <InputNumber id="goal-target" class="form-control" @bind-Value="form.TargetAmount" />
                 </div>
                 @if (editingId is null)
                 {
                     <div class="form-group">
-                        <label for="goal-currency">Валюта</label>
+                        <label for="goal-currency">@T.Currency</label>
                         <CurrencySelect Id="goal-currency" @bind-Value="form.Currency" />
                     </div>
                 }
@@ -56,23 +56,24 @@
 
             @if (editingId is null)
             {
-                <label for="goal-category">Категория</label>
-                <CategorySelect Id="goal-category" Categories="Categories" EmptyLabel="Новая категория для цели" @bind-Value="form.CategoryId" />
+                <label for="goal-category">@T.Category</label>
+                <CategorySelect Id="goal-category" Categories="Categories" EmptyLabel="@T.NewGoalCategory" @bind-Value="form.CategoryId" />
             }
             else
             {
-                <p class="muted">Валюта и категория цели не меняются: уже внесённые взносы записаны в них.</p>
+                <p class="muted">@T.GoalFixedFields</p>
             }
 
-            <label for="goal-date">Дата цели (необязательно)</label>
+            <label for="goal-date">@T.GoalDate</label>
             <InputDate id="goal-date" class="form-control" @bind-Value="form.TargetDate" />
 
-            <button class="btn btn--primary" type="submit" disabled="@Saving">@(editingId is null ? "Создать цель" : "Сохранить")</button>
+            <button class="btn btn--primary" type="submit" disabled="@Saving">@(editingId is null ? T.CreateGoal : T.Save)</button>
         </EditForm>
     }
 </section>
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter] public List<GoalDto> Items { get; set; } = [];
     [Parameter] public List<CategoryDto> Categories { get; set; } = [];
     [Parameter] public bool Saving { get; set; }
@@ -144,8 +145,7 @@
             return;
 
         var amountMinor = Money.ToMinor(amount);
-        var message = $"Внести {Money.Format(amountMinor)} {goal.Currency} в цель «{goal.Name}»? " +
-                      "Взнос будет записан как доход в категории цели.";
+        var message = T.ConfirmContribute($"{Money.Format(amountMinor)} {goal.Currency}", goal.Name);
 
         if (!await JS.ConfirmAsync(message))
             return;
@@ -156,7 +156,7 @@
 
     private async Task ConfirmAndDeleteAsync(GoalDto goal)
     {
-        if (await JS.ConfirmAsync($"Удалить цель «{goal.Name}»? Уже внесённые взносы останутся в истории."))
+        if (await JS.ConfirmAsync(T.ConfirmDeleteGoal(goal.Name)))
             await OnDelete.InvokeAsync(goal.Id);
     }
 

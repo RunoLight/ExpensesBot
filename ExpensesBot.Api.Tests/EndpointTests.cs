@@ -209,7 +209,7 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
         var lines = Encoding.UTF8.GetString(bytes).TrimStart('﻿')
             .Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-        lines[0].Should().StartWith("Дата (UTC),Тип,Категория,Сумма,Валюта,Комментарий");
+        lines[0].Should().StartWith("Date (UTC),Type,Category,Amount,Currency,Note");
         lines[1].Should().Contain(",123.45,AMD,");
         lines[1].Should().Contain("\"'=HYPERLINK(\"\"x\"\")\"", "formulas must be neutralised");
     }
@@ -259,6 +259,31 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
         (await db.Users.AnyAsync(u => u.Id == profile!.Id)).Should().BeFalse();
         (await db.Transactions.AnyAsync(t => t.UserId == profile!.Id)).Should().BeFalse();
         (await db.Categories.AnyAsync(c => c.UserId == profile!.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Language_IsSavedInTheProfile_AndUsedForTheExport()
+    {
+        var client = factory.CreateClientForDevUser(100_107);
+        (await client.GetFromJsonAsync<UserProfileResponse>("/api/v1/profile"))!.Language.Should().Be("en");
+
+        var response = await client.PutAsJsonAsync("/api/v1/profile/language", new { Language = "RU" });
+        await CreateAsync(client, Transaction(1_000));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await client.GetFromJsonAsync<UserProfileResponse>("/api/v1/profile"))!.Language.Should().Be("ru");
+        var csv = Encoding.UTF8.GetString(await client.GetByteArrayAsync("/api/v1/transactions/export"));
+        csv.Should().Contain("Дата (UTC),Тип,Категория").And.Contain("Расход").And.Contain("Без категории");
+    }
+
+    [Fact]
+    public async Task UnsupportedLanguage_IsRejected()
+    {
+        var client = factory.CreateClientForDevUser(100_108);
+
+        var response = await client.PutAsJsonAsync("/api/v1/profile/language", new { Language = "de" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     private static Task<HttpResponseMessage> PostWithKeyAsync(HttpClient client, string key, object request)

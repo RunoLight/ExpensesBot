@@ -2,16 +2,17 @@
     <button type="button"
             class="@(Value == TransactionType.Expense ? "active expense" : null)"
             @onclick="() => SetAsync(TransactionType.Expense)">
-        📉 Расход
+        📉 @T.Expense
     </button>
     <button type="button"
             class="@(Value == TransactionType.Income ? "active income" : null)"
             @onclick="() => SetAsync(TransactionType.Income)">
-        📈 Доход
+        📈 @T.Income
     </button>
 </div>
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter] public TransactionType Value { get; set; }
     [Parameter] public EventCallback<TransactionType> ValueChanged { get; set; }
 

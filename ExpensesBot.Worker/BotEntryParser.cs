@@ -21,13 +21,14 @@ public static partial class BotEntryParser
     public const int MaxNoteLength = 200;
 
     // Sign, currency symbol before the number, the number ("1500", "1 500", "99,90"),
-    // a thousands multiplier glued to it ("2к", "1.5k", "3 тыс") and a currency after it.
+    // a thousands multiplier glued to it ("2к", "1.5k", "3 тыс") and a currency after it,
+    // as a symbol or an English or Russian word ("20 dollars", "700 руб").
     private const string AmountPattern =
         @"(?<sign>[+\-−])?\s*" +
         @"(?<pre>[$₽֏])?\s*" +
         @"(?<num>\d{1,3}(?:[  ]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)" +
         @"(?<mult>(?:к|k)(?!\p{L})|\s?тыс\.?(?!\p{L}))?" +
-        @"(?:\s?(?<post>[$₽֏]|(?:usd|rub|amd|долл(?:ар(?:а|ов)?)?|бакс(?:а|ов)?|руб(?:л(?:ь|я|ей))?|р|драм(?:а|ов)?)(?!\p{L}))\.?)?";
+        @"(?:\s?(?<post>[$₽֏]|(?:usd|rub|amd|dollars?|bucks?|r[o]?ubles?|drams?|долл(?:ар(?:а|ов)?)?|бакс(?:а|ов)?|руб(?:л(?:ь|я|ей))?|р|драм(?:а|ов)?)(?!\p{L}))\.?)?";
 
     [GeneratedRegex("^" + AmountPattern + @"(?:\s+(?<note>.+))?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)]
     private static partial Regex AmountFirst();
@@ -66,7 +67,7 @@ public static partial class BotEntryParser
         return true;
     }
 
-    /// <summary>Maps "$", "usd", "долларов", "₽", "руб", "р.", "֏", "драм" to a currency code.</summary>
+    /// <summary>Maps "$", "usd", "dollars", "долларов", "₽", "руб", "roubles", "р.", "֏", "dram", "драм" to a currency code.</summary>
     public static string? CurrencyFrom(string token)
     {
         var value = token.Trim().TrimEnd('.').ToLowerInvariant();
@@ -80,6 +81,9 @@ public static partial class BotEntryParser
             "долл" or "доллар" or "доллара" or "долларов" or "бакс" or "бакса" or "баксов" => "USD",
             "руб" or "рубль" or "рубля" or "рублей" => "RUB",
             "драм" or "драма" or "драмов" => "AMD",
+            "dollar" or "dollars" or "buck" or "bucks" => "USD",
+            "ruble" or "rubles" or "rouble" or "roubles" => "RUB",
+            "dram" or "drams" => "AMD",
             _ => null
         };
     }

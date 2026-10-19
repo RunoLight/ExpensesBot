@@ -1,6 +1,6 @@
 <section class="panel">
-    <PanelHeader Title="Категории" AddTitle="Новая категория" FormOpen="showForm" OnToggleForm="() => showForm = !showForm">
-        <button type="button" class="btn-icon @(manageMode ? "btn-icon--active" : null)" title="Управление категориями" @onclick="() => manageMode = !manageMode">📋</button>
+    <PanelHeader Title="@T.Categories" AddTitle="@T.NewCategory" FormOpen="showForm" OnToggleForm="() => showForm = !showForm">
+        <button type="button" class="btn-icon @(manageMode ? "btn-icon--active" : null)" title="@T.ManageCategories" @onclick="() => manageMode = !manageMode">📋</button>
     </PanelHeader>
 
     @if (showForm)
@@ -8,15 +8,15 @@
         <EditForm Model="form" OnValidSubmit="SubmitAsync">
             <div class="form-row">
                 <div class="form-group">
-                    <label for="cat-name">Название</label>
+                    <label for="cat-name">@T.Name</label>
                     <InputText id="cat-name" class="form-control" @bind-Value="form.Name" />
                 </div>
                 <div class="form-group">
-                    <label for="cat-icon">Иконка</label>
+                    <label for="cat-icon">@T.Icon</label>
                     <InputText id="cat-icon" class="form-control" @bind-Value="form.Icon" placeholder="🛒" />
                 </div>
             </div>
-            <button class="btn btn--primary" type="submit" disabled="@Saving">Добавить</button>
+            <button class="btn btn--primary" type="submit" disabled="@Saving">@T.Add</button>
         </EditForm>
     }
 
@@ -29,13 +29,13 @@
                 <div class="list-row__body">@category.Name</div>
                 @if (category.IsArchived)
                 {
-                    <button type="button" class="btn-icon-textless btn-icon-textless--secondary" title="Вернуть из архива" @onclick="() => ConfirmAndArchiveAsync(category, false)">↩</button>
+                    <button type="button" class="btn-icon-textless btn-icon-textless--secondary" title="@T.Unarchive" @onclick="() => ConfirmAndArchiveAsync(category, false)">↩</button>
                 }
                 else
                 {
-                    <button type="button" class="btn-icon-textless btn-icon-textless--secondary" title="Архивировать — скрыть из форм" @onclick="() => ConfirmAndArchiveAsync(category, true)">🗂️</button>
+                    <button type="button" class="btn-icon-textless btn-icon-textless--secondary" title="@T.ArchiveHint" @onclick="() => ConfirmAndArchiveAsync(category, true)">🗂️</button>
                 }
-                <button type="button" class="btn-icon-textless btn-icon-textless--danger" title="Удалить" @onclick="() => ConfirmAndDeleteAsync(category)">✕</button>
+                <button type="button" class="btn-icon-textless btn-icon-textless--danger" title="@T.Delete" @onclick="() => ConfirmAndDeleteAsync(category)">✕</button>
             </article>
         }
     }
@@ -48,7 +48,7 @@
                     @(category.Icon ?? "📁") @category.Name
                     @if (category.IsArchived)
                     {
-                        <small>архив</small>
+                        <small>@T.Archived</small>
                     }
                 </span>
             }
@@ -57,6 +57,7 @@
 </section>
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter] public List<CategoryDto> Categories { get; set; } = [];
     [Parameter] public bool Saving { get; set; }
 
@@ -83,8 +84,8 @@
     private async Task ConfirmAndArchiveAsync(CategoryDto category, bool archive)
     {
         var message = archive
-            ? $"Архивировать категорию «{category.Name}»? Она пропадёт из форм, но останется в истории."
-            : $"Вернуть категорию «{category.Name}» из архива?";
+            ? T.ConfirmArchiveCategory(category.Name)
+            : T.ConfirmUnarchiveCategory(category.Name);
 
         if (await JS.ConfirmAsync(message))
             await OnArchive.InvokeAsync(category.Id);
@@ -92,7 +93,7 @@
 
     private async Task ConfirmAndDeleteAsync(CategoryDto category)
     {
-        if (await JS.ConfirmAsync($"Удалить категорию «{category.Name}»? Операции останутся, но без категории."))
+        if (await JS.ConfirmAsync(T.ConfirmDeleteCategory(category.Name)))
             await OnDelete.InvokeAsync(category.Id);
     }
 }

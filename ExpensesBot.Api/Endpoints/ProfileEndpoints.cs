@@ -25,6 +25,14 @@ public static class ProfileEndpoints
                 : result.Error!.ToProblem();
         });
 
+        group.MapPut("/language", async (SetLanguageRequest request, ClaimsPrincipal user, ProfileService service, CancellationToken ct) =>
+        {
+            var result = await service.SetLanguageAsync(user.GetUserId(), request, ct);
+            return result.IsSuccess
+                ? Results.Ok(new { Language = result.Value })
+                : result.Error!.ToProblem();
+        });
+
         group.MapDelete("/", async (ClaimsPrincipal user, ProfileService service, CancellationToken ct) =>
             (await service.DeleteAccountAsync(user.GetUserId(), ct)).ToNoContent());
 

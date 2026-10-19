@@ -26,13 +26,6 @@ public sealed class TelegramBotHandler(
     private const string CancelData = "cancel";
     private const string KeepData = "keep";
 
-    public const string EntryHint =
-        "✏️ Отправьте сумму и, если хотите, описание:\n" +
-        "• 1500 кофе\n" +
-        "• +50000 зарплата — плюс значит доход\n" +
-        "• 20$ такси или такси 700 руб — другая валюта\n" +
-        "• 1,5к продукты — тысячи";
-
     private string WebAppUrl =>
         configuration["Telegram:WebAppUrl"] ?? "https://runolight.github.io/ExpensesBot/";
 
@@ -90,9 +83,11 @@ public sealed class TelegramBotHandler(
         if (update["callback_query"] is JObject callbackQuery)
             await AnswerCallbackQueryAsync(botToken, callbackQuery["id"]?.Value<string>() ?? "", ct);
 
+        // No database round trip on this path: answer in the language of the user's Telegram app.
+        var t = BotText.For(Languages.FromTelegram(source["from"]?["language_code"]?.Value<string>()));
         var chatId = source["chat"]?["id"]?.Value<long>() ?? source["message"]?["chat"]?["id"]?.Value<long>();
         if (shouldWarn && chatId is { } id)
-            await SendMessageAsync(botToken, id, "⏳ Слишком много сообщений подряд — подождите немного.", null, ct);
+            await SendMessageAsync(botToken, id, t.TooManyMessages, null, ct);
 
         return false;
     }
@@ -107,9 +102,12 @@ public sealed class TelegramBotHandler(
         var messageId = message["message_id"]?.Value<long>();
         var telegramUserId = message["from"]?["id"]?.Value<long>();
         var firstName = message["from"]?["first_name"]?.Value<string>();
+        var languageCode = message["from"]?["language_code"]?.Value<string>();
 
         if (string.IsNullOrWhiteSpace(text) || chatId is null)
             return false;
+
+        var t = await TextForAsync(telegramUserId, languageCode, ct);
 
         var command = text.Trim().Split(' ', '@')[0].ToLowerInvariant();
 
@@ -118,44 +116,49 @@ public sealed class TelegramBotHandler(
             case "/start":
                 // t.me/<bot>?start=join_CODE arrives as "/start join_CODE".
                 if (TryReadJoinCode(text, out var inviteCode) && telegramUserId.HasValue)
-                    await JoinWalletAsync(botToken, chatId.Value, telegramUserId.Value, firstName, inviteCode, ct);
+                    await JoinWalletAsync(botToken, t, chatId.Value, telegramUserId.Value, firstName, languageCode, inviteCode, ct);
                 else
-                    await SendStartMessageAsync(botToken, chatId.Value, firstName, ct);
+                    await SendMessageAsync(botToken, chatId.Value, t.Start(firstName), null, ct);
                 return true;
 
             case "/expenses":
-                await SendWebAppMessageAsync(botToken, chatId.Value, "📊 Откройте приложение для учёта финансов:", "Открыть ExpensesBot", WebAppUrl, ct);
+                await SendWebAppMessageAsync(botToken, chatId.Value, t.OpenAppPrompt, t.OpenAppButton, WebAppUrl, ct);
                 return true;
 
             case "/income":
-                await SendWebAppMessageAsync(botToken, chatId.Value, "📈 Откройте приложение, чтобы записать доход:", "📈 Записать доход", WebAppUrl, ct);
+                await SendWebAppMessageAsync(botToken, chatId.Value, t.RecordIncomePrompt, t.RecordIncomeButton, WebAppUrl, ct);
                 return true;
 
             case "/report":
                 if (telegramUserId.HasValue)
-                    await SendWeeklyReportAsync(botToken, chatId.Value, telegramUserId.Value, ct);
+                    await SendWeeklyReportAsync(botToken, t, chatId.Value, telegramUserId.Value, ct);
                 return true;
 
             case "/menu":
-                await SendMenuMessageAsync(botToken, chatId.Value, ct);
+                await SendMenuMessageAsync(botToken, t, chatId.Value, ct);
                 return true;
 
             case "/undo":
                 if (telegramUserId.HasValue)
-                    await OfferUndoAsync(botToken, chatId.Value, telegramUserId.Value, ct);
+                    await OfferUndoAsync(botToken, t, chatId.Value, telegramUserId.Value, ct);
+                return true;
+
+            case "/language":
+                if (telegramUserId.HasValue)
+                    await SwitchLanguageAsync(botToken, chatId.Value, telegramUserId.Value, firstName, languageCode, text, ct);
                 return true;
         }
 
         if (telegramUserId.HasValue && TryParseEntry(text, out var entry))
         {
-            await AskToConfirmAsync(botToken, chatId.Value, messageId, telegramUserId.Value, firstName, entry, ct);
+            await AskToConfirmAsync(botToken, t, chatId.Value, messageId, telegramUserId.Value, firstName, languageCode, entry, ct);
             return true;
         }
 
         // Looks like an attempt to record something: explain the format.
         if (text.Any(char.IsDigit))
         {
-            await SendMessageAsync(botToken, chatId.Value, "Не понял сумму. " + EntryHint, null, ct);
+            await SendMessageAsync(botToken, chatId.Value, t.AmountNotUnderstood, null, ct);
             return true;
         }
 
@@ -174,9 +177,10 @@ public sealed class TelegramBotHandler(
     }
 
     private async Task JoinWalletAsync(
-        string botToken, long chatId, long telegramUserId, string? firstName, string code, CancellationToken ct)
+        string botToken, BotText t, long chatId, long telegramUserId, string? firstName, string? languageCode, string code,
+        CancellationToken ct)
     {
-        var user = await GetOrCreateUserAsync(telegramUserId, firstName, ct);
+        var user = await GetOrCreateUserAsync(telegramUserId, firstName, languageCode, ct);
 
         await using var scope = serviceProvider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
@@ -185,20 +189,38 @@ public sealed class TelegramBotHandler(
 
         var text = result.Status switch
         {
-            JoinWalletStatus.Joined =>
-                $"👥 Вы присоединились к общему кошельку «{result.Wallet!.Name}».\n\n" +
-                "Операции, записанные в него, видят все участники. Выбрать кошелёк при записи и посмотреть общую сводку можно в приложении.",
-            JoinWalletStatus.AlreadyMember =>
-                $"Вы уже участник кошелька «{result.Wallet!.Name}».",
-            JoinWalletStatus.Full =>
-                $"В кошельке «{result.Wallet!.Name}» уже {WalletInvites.MaxMembers} участников — больше добавить нельзя.",
-            _ => "Приглашение не найдено: возможно, владелец сменил код. Попросите новую ссылку."
+            JoinWalletStatus.Joined => t.JoinedWallet(result.Wallet!.Name),
+            JoinWalletStatus.AlreadyMember => t.AlreadyWalletMember(result.Wallet!.Name),
+            JoinWalletStatus.Full => t.WalletFull(result.Wallet!.Name, WalletInvites.MaxMembers),
+            _ => t.InviteNotFound
         };
 
-        await SendWebAppMessageAsync(botToken, chatId, text, "👥 Открыть кошельки", WebAppUrl, ct);
+        await SendWebAppMessageAsync(botToken, chatId, text, t.WalletsButton, WebAppUrl, ct);
     }
 
-    /// <summary>A bare amount ("1 500,50") or a free-form entry ("1500 кофе", "+20$ возврат").</summary>
+    /// <summary>
+    /// /language switches between English and Russian; "/language en" or "/language ru"
+    /// picks one. Saved in the profile, so the Mini App and notifications follow.
+    /// </summary>
+    private async Task SwitchLanguageAsync(
+        string botToken, long chatId, long telegramUserId, string? firstName, string? languageCode, string text, CancellationToken ct)
+    {
+        var user = await GetOrCreateUserAsync(telegramUserId, firstName, languageCode, ct);
+        var argument = text.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries).ElementAtOrDefault(1);
+        var language = Languages.TryNormalize(argument, out var requested)
+            ? requested
+            : user.Language == Languages.Russian ? Languages.English : Languages.Russian;
+
+        await using var scope = serviceProvider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
+        await db.Users
+            .Where(u => u.Id == user.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.Language, language), ct);
+
+        await SendMessageAsync(botToken, chatId, BotText.For(language).LanguageChanged, null, ct);
+    }
+
+    /// <summary>A bare amount ("1 500,50") or a free-form entry ("1500 coffee", "+20$ refund").</summary>
     public static bool TryParseEntry(string text, out BotEntry entry)
     {
         if (TryParseAmount(text, out var amount))
@@ -221,54 +243,57 @@ public sealed class TelegramBotHandler(
         var messageId = callbackQuery["message"]?["message_id"]?.Value<long>();
         var sender = callbackQuery["from"];
         var telegramUserId = sender?["id"]?.Value<long>();
+        var firstName = sender?["first_name"]?.Value<string>();
+        var languageCode = sender?["language_code"]?.Value<string>();
 
         try
         {
             if (chatId is null)
                 return false;
 
+            var t = await TextForAsync(telegramUserId, languageCode, ct);
+
             switch (data)
             {
                 case CancelData:
                 case "cancel_expense":
-                    await EditOrSendAsync(botToken, chatId.Value, messageId, "Отменено.", ct);
+                    await EditOrSendAsync(botToken, chatId.Value, messageId, t.Cancelled, ct);
                     return true;
 
                 case KeepData:
-                    await EditOrSendAsync(botToken, chatId.Value, messageId, "Хорошо, запись осталась.", ct);
+                    await EditOrSendAsync(botToken, chatId.Value, messageId, t.Kept, ct);
                     return true;
 
                 case "menu_stats":
-                    await SendWeeklyReportAsync(botToken, chatId.Value, telegramUserId ?? 0, ct);
+                    await SendWeeklyReportAsync(botToken, t, chatId.Value, telegramUserId ?? 0, ct);
                     return true;
 
                 case "menu_undo":
                     if (telegramUserId.HasValue)
-                        await OfferUndoAsync(botToken, chatId.Value, telegramUserId.Value, ct);
+                        await OfferUndoAsync(botToken, t, chatId.Value, telegramUserId.Value, ct);
                     return true;
 
                 case "menu_income":
                 case "menu_expense":
-                    await SendMessageAsync(botToken, chatId.Value, EntryHint, null, ct);
+                    await SendMessageAsync(botToken, chatId.Value, t.EntryHint, null, ct);
                     return true;
 
                 case "menu_goals":
                 case "menu_categories":
-                    await SendWebAppMessageAsync(botToken, chatId.Value,
-                        "Цели и категории настраиваются в приложении:", "Открыть ExpensesBot", WebAppUrl, ct);
+                    await SendWebAppMessageAsync(botToken, chatId.Value, t.GoalsInApp, t.OpenAppButton, WebAppUrl, ct);
                     return true;
             }
 
             if (telegramUserId is not null && BotUndo.TryParseCallback(data, out var undoId))
             {
-                await UndoAsync(botToken, chatId.Value, messageId, telegramUserId.Value, undoId, ct);
+                await UndoAsync(botToken, t, chatId.Value, messageId, telegramUserId.Value, undoId, ct);
                 return true;
             }
 
             if (telegramUserId is not null && RecordCallback.TryParseTypeStep(data, out var typeStep))
             {
-                var stepUser = await GetOrCreateUserAsync(telegramUserId.Value, sender?["first_name"]?.Value<string>(), ct);
-                await ShowCategoryPickerAsync(botToken, chatId.Value, stepUser, typeStep,
+                var stepUser = await GetOrCreateUserAsync(telegramUserId.Value, firstName, languageCode, ct);
+                await ShowCategoryPickerAsync(botToken, t, chatId.Value, stepUser, typeStep,
                     ReadNoteFromQuestion(callbackQuery), messageId, null, ct);
                 return true;
             }
@@ -276,23 +301,21 @@ public sealed class TelegramBotHandler(
             if (telegramUserId is null || !TryParseRecord(data, out var request))
                 return false;
 
-            var user = await GetOrCreateUserAsync(telegramUserId.Value, sender?["first_name"]?.Value<string>(), ct);
+            var user = await GetOrCreateUserAsync(telegramUserId.Value, firstName, languageCode, ct);
             var note = ReadNoteFromQuestion(callbackQuery);
-            var recorded = await RecordTransactionAsync(user, request, note, ct);
-
-            var label = request.Type == TransactionType.Income ? "Доход" : "Расход";
+            var recorded = await RecordTransactionAsync(t, user, request, note, ct);
 
             if (recorded is not { } entry)
             {
-                await EditOrSendAsync(botToken, chatId.Value, messageId,
-                    "Не удалось записать. Откройте приложение /expenses и попробуйте снова.", ct);
+                await EditOrSendAsync(botToken, chatId.Value, messageId, t.RecordFailed, ct);
                 return true;
             }
 
-            var result = $"✅ {label} {FormatAmount(request.Amount)} {entry.Transaction.Currency} записан" +
-                         (entry.Category is { } category ? $" · {category.Icon} {category.Name}" : "") +
-                         (note is not null ? $" · {note}" : "") +
-                         ".\n\nПодробная статистика — в приложении: /expenses";
+            var result = t.Recorded(
+                request.Type,
+                $"{FormatAmount(request.Amount)} {entry.Transaction.Currency}",
+                entry.Category is { } category ? $"{category.Icon} {category.Name}" : null,
+                note);
 
             // The record buttons are replaced with a single "undo", so the same
             // transaction can't be recorded twice by tapping again.
@@ -300,7 +323,7 @@ public sealed class TelegramBotHandler(
             {
                 inline_keyboard = new[]
                 {
-                    new[] { new { text = "↩️ Отменить", callback_data = BotUndo.BuildCallback(entry.Transaction.Id) } }
+                    new[] { new { text = t.UndoButton, callback_data = BotUndo.BuildCallback(entry.Transaction.Id) } }
                 }
             };
 
@@ -367,21 +390,23 @@ public sealed class TelegramBotHandler(
     /// </summary>
     private async Task AskToConfirmAsync(
         string botToken,
+        BotText t,
         long chatId,
         long? replyToMessageId,
         long telegramUserId,
         string? firstName,
+        string? languageCode,
         BotEntry entry,
         CancellationToken ct)
     {
-        var user = await GetOrCreateUserAsync(telegramUserId, firstName, ct);
+        var user = await GetOrCreateUserAsync(telegramUserId, firstName, languageCode, ct);
         var currency = entry.Currency ?? user.DefaultCurrency;
         var guess = await GuessCategoryAsync(user.Id, entry.Note, ct);
 
         if (entry.Type is { } knownType)
         {
             var request = new RecordCallback(knownType, entry.Amount, currency, guess?.Id);
-            await ShowCategoryPickerAsync(botToken, chatId, user, request, entry.Note, null, replyToMessageId, ct);
+            await ShowCategoryPickerAsync(botToken, t, chatId, user, request, entry.Note, null, replyToMessageId, ct);
             return;
         }
 
@@ -393,16 +418,16 @@ public sealed class TelegramBotHandler(
             inline_keyboard = new object[][]
             {
                 [
-                    new { text = "➖ Расход", callback_data = TypeStep(TransactionType.Expense) },
-                    new { text = "➕ Доход", callback_data = TypeStep(TransactionType.Income) }
+                    new { text = t.ExpenseButton, callback_data = TypeStep(TransactionType.Expense) },
+                    new { text = t.IncomeButton, callback_data = TypeStep(TransactionType.Income) }
                 ],
                 [
-                    new { text = "❌ Отмена", callback_data = CancelData }
+                    new { text = t.CancelButton, callback_data = CancelData }
                 ]
             }
         };
 
-        var text = DescribeEntry(entry.Amount, currency, entry.Note, guess) + "\n\nЭто расход или доход?";
+        var text = DescribeEntry(entry.Amount, currency, entry.Note, guess) + "\n\n" + t.ExpenseOrIncome;
 
         // Replying to the user's message lets the button handlers read the note back.
         await SendMessageAsync(botToken, chatId, text, keyboard, ct, replyToMessageId);
@@ -415,6 +440,7 @@ public sealed class TelegramBotHandler(
     /// </summary>
     private async Task ShowCategoryPickerAsync(
         string botToken,
+        BotText t,
         long chatId,
         User user,
         RecordCallback request,
@@ -454,14 +480,13 @@ public sealed class TelegramBotHandler(
             .Select(row => row.Cast<object>().ToArray())
             .Append(new object[]
             {
-                new { text = "🚫 Без категории", callback_data = Record(null) },
-                new { text = "❌ Отмена", callback_data = CancelData }
+                new { text = t.NoCategoryButton, callback_data = Record(null) },
+                new { text = t.CancelButton, callback_data = CancelData }
             })
             .ToArray();
 
-        var label = request.Type == TransactionType.Income ? "➕ Доход" : "➖ Расход";
         var text = DescribeEntry(request.Amount, request.Currency ?? user.DefaultCurrency, note, guess) +
-                   $"\n\n{label} — выберите категорию:";
+                   "\n\n" + t.ChooseCategory(request.Type);
         var keyboard = new { inline_keyboard = rows };
 
         if (messageIdToEdit is { } messageId)
@@ -504,7 +529,20 @@ public sealed class TelegramBotHandler(
             .Select(c => new CategoryOption(c.Id, c.Name, c.Icon))
             .ToListAsync(ct);
 
-    private async Task<User> GetOrCreateUserAsync(long telegramUserId, string? firstName, CancellationToken ct)
+    /// <summary>Texts in the user's saved language, or in their Telegram app's language before the first entry.</summary>
+    private async Task<BotText> TextForAsync(long? telegramUserId, string? languageCode, CancellationToken ct)
+    {
+        await using var scope = serviceProvider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
+
+        var saved = telegramUserId is { } id
+            ? await db.Users.Where(u => u.TelegramUserId == id).Select(u => u.Language).FirstOrDefaultAsync(ct)
+            : null;
+
+        return BotText.For(saved ?? Languages.FromTelegram(languageCode));
+    }
+
+    private async Task<User> GetOrCreateUserAsync(long telegramUserId, string? firstName, string? languageCode, CancellationToken ct)
     {
         await using var scope = serviceProvider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
@@ -515,7 +553,7 @@ public sealed class TelegramBotHandler(
         if (user is not null)
             return user;
 
-        user = UserFactory.Create(telegramUserId, firstName);
+        user = UserFactory.Create(telegramUserId, firstName, Languages.FromTelegram(languageCode));
         db.Users.Add(user);
 
         try
@@ -533,7 +571,7 @@ public sealed class TelegramBotHandler(
 
     private sealed record RecordedEntry(Transaction Transaction, CategoryOption? Category);
 
-    private async Task<RecordedEntry?> RecordTransactionAsync(User user, RecordCallback request, string? note, CancellationToken ct)
+    private async Task<RecordedEntry?> RecordTransactionAsync(BotText t, User user, RecordCallback request, string? note, CancellationToken ct)
     {
         var amountMinor = decimal.ToInt64(decimal.Round(request.Amount * 100m, 0, MidpointRounding.AwayFromZero));
         if (amountMinor <= 0)
@@ -558,7 +596,7 @@ public sealed class TelegramBotHandler(
             AmountMinor = amountMinor,
             Currency = request.Currency ?? user.DefaultCurrency,
             Type = request.Type,
-            Note = note ?? (request.Type == TransactionType.Income ? "Доход из Telegram" : "Из Telegram"),
+            Note = note ?? t.DefaultNote(request.Type),
             OccurredAtUtc = DateTime.UtcNow,
             CreatedAtUtc = DateTime.UtcNow
         };
@@ -574,7 +612,7 @@ public sealed class TelegramBotHandler(
     }
 
     /// <summary>/undo: shows the latest transaction and asks before deleting it.</summary>
-    private async Task OfferUndoAsync(string botToken, long chatId, long telegramUserId, CancellationToken ct)
+    private async Task OfferUndoAsync(string botToken, BotText t, long chatId, long telegramUserId, CancellationToken ct)
     {
         await using var scope = serviceProvider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
@@ -582,7 +620,7 @@ public sealed class TelegramBotHandler(
         var last = await BotUndo.FindLastAsync(db, telegramUserId, ct);
         if (last is null)
         {
-            await SendMessageAsync(botToken, chatId, "Пока нечего отменять: записей нет.", null, ct);
+            await SendMessageAsync(botToken, chatId, t.NothingToUndo, null, ct);
             return;
         }
 
@@ -592,16 +630,16 @@ public sealed class TelegramBotHandler(
             {
                 new[]
                 {
-                    new { text = "🗑 Удалить", callback_data = BotUndo.BuildCallback(last.Id) },
-                    new { text = "Оставить", callback_data = KeepData }
+                    new { text = t.DeleteButton, callback_data = BotUndo.BuildCallback(last.Id) },
+                    new { text = t.KeepButton, callback_data = KeepData }
                 }
             }
         };
 
-        await SendMessageAsync(botToken, chatId, $"Удалить последнюю запись?\n{last.Describe()}", keyboard, ct);
+        await SendMessageAsync(botToken, chatId, t.ConfirmUndo(last.Describe(t)), keyboard, ct);
     }
 
-    private async Task UndoAsync(string botToken, long chatId, long? messageId, long telegramUserId, long transactionId, CancellationToken ct)
+    private async Task UndoAsync(string botToken, BotText t, long chatId, long? messageId, long telegramUserId, long transactionId, CancellationToken ct)
     {
         await using var scope = serviceProvider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
@@ -609,13 +647,13 @@ public sealed class TelegramBotHandler(
         var deleted = await BotUndo.DeleteAsync(db, telegramUserId, transactionId, ct);
 
         var text = deleted is not null
-            ? $"↩️ Запись удалена:\n{deleted.Describe()}"
-            : "Эта запись уже удалена.";
+            ? t.Undone(deleted.Describe(t))
+            : t.AlreadyDeleted;
 
         await EditOrSendAsync(botToken, chatId, messageId, text, ct);
     }
 
-    private async Task SendWeeklyReportAsync(string botToken, long chatId, long telegramUserId, CancellationToken ct)
+    private async Task SendWeeklyReportAsync(string botToken, BotText t, long chatId, long telegramUserId, CancellationToken ct)
     {
         await using var scope = serviceProvider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
@@ -625,7 +663,7 @@ public sealed class TelegramBotHandler(
 
         if (user is null)
         {
-            await SendMessageAsync(botToken, chatId, "Пока нет данных. Отправьте сумму расхода, например: 1500", null, ct);
+            await SendMessageAsync(botToken, chatId, t.NoDataYet, null, ct);
             return;
         }
 
@@ -644,7 +682,7 @@ public sealed class TelegramBotHandler(
                         t.Type == TransactionType.Expense &&
                         t.Currency == user.DefaultCurrency &&
                         t.OccurredAtUtc >= weekAgo)
-            .GroupBy(t => t.Category != null ? t.Category.Name : "Без категории")
+            .GroupBy(x => x.Category != null ? x.Category.Name : null)
             .Select(g => new { Name = g.Key, Total = g.Sum(t => t.AmountMinor) })
             .OrderByDescending(x => x.Total)
             .Take(5)
@@ -656,36 +694,23 @@ public sealed class TelegramBotHandler(
 
         var lines = new List<string>
         {
-            "📊 Последние 7 дней",
+            t.ReportTitle,
             "",
-            $"➖ Расходы: {NotificationTexts.FormatMoney(expense, currency)}",
-            $"➕ Доходы: {NotificationTexts.FormatMoney(income, currency)}"
+            t.ReportExpenses(t.Money(expense, currency)),
+            t.ReportIncome(t.Money(income, currency))
         };
 
         if (topCategories.Count > 0)
         {
             lines.Add("");
-            lines.Add("📂 Топ категорий:");
-            lines.AddRange(topCategories.Select(c => $"  • {c.Name}: {NotificationTexts.FormatMoney(c.Total, currency)}"));
+            lines.Add(t.TopCategories);
+            lines.AddRange(topCategories.Select(c => $"  • {c.Name ?? t.Shared.NoCategory}: {t.Money(c.Total, currency)}"));
         }
 
         lines.Add("");
-        lines.Add($"Учитываются операции в {currency}. Полная статистика — /expenses");
+        lines.Add(t.ReportFooter(currency));
 
         await SendMessageAsync(botToken, chatId, string.Join("\n", lines), null, ct);
-    }
-
-    private Task SendStartMessageAsync(string botToken, long chatId, string? firstName, CancellationToken ct)
-    {
-        var text = $"Привет, {firstName ?? "друг"}! 👋\n\n" +
-                   "Я — трекер личных финансов. Вот что я умею:\n\n" +
-                   "/menu — главное меню\n" +
-                   "/expenses — открыть приложение\n" +
-                   "/report — сводка за 7 дней\n" +
-                   "/undo — удалить последнюю запись\n\n" +
-                   "Или просто отправьте сумму с описанием, например «1500 кофе» или «+50000 зарплата», — я подберу категорию и запишу.";
-
-        return SendMessageAsync(botToken, chatId, text, null, ct);
     }
 
     private Task SendWebAppMessageAsync(
@@ -702,31 +727,30 @@ public sealed class TelegramBotHandler(
         return SendMessageAsync(botToken, chatId, text, keyboard, ct);
     }
 
-    private Task SendMenuMessageAsync(string botToken, long chatId, CancellationToken ct)
+    private Task SendMenuMessageAsync(string botToken, BotText t, long chatId, CancellationToken ct)
     {
         var keyboard = new
         {
             inline_keyboard = new object[][]
             {
                 [
-                    new { text = "📊 Сводка", callback_data = "menu_stats" },
-                    new { text = "✏️ Записать", callback_data = "menu_expense" }
+                    new { text = t.MenuSummary, callback_data = "menu_stats" },
+                    new { text = t.MenuRecord, callback_data = "menu_expense" }
                 ],
                 [
-                    new { text = "🎯 Цели", callback_data = "menu_goals" },
-                    new { text = "📁 Категории", callback_data = "menu_categories" }
+                    new { text = t.MenuGoals, callback_data = "menu_goals" },
+                    new { text = t.MenuCategories, callback_data = "menu_categories" }
                 ],
                 [
-                    new { text = "↩️ Отменить последнюю запись", callback_data = "menu_undo" }
+                    new { text = t.MenuUndo, callback_data = "menu_undo" }
                 ],
                 [
-                    new { text = "📱 Открыть приложение", web_app = new { url = WebAppUrl } }
+                    new { text = t.MenuOpenApp, web_app = new { url = WebAppUrl } }
                 ]
             }
         };
 
-        return SendMessageAsync(botToken, chatId,
-            "📱 Главное меню:\n\nВыберите действие или откройте приложение.", keyboard, ct);
+        return SendMessageAsync(botToken, chatId, t.MenuTitle, keyboard, ct);
     }
 
     public static string FormatAmount(decimal amount) =>

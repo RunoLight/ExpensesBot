@@ -17,9 +17,4 @@ public static class RecurrenceSchedule
             RecurrencePattern.Yearly => nowUtc >= lastExecutedUtc.AddYears(1),
             _ => false
         };
-
-    public static string AutoNote(RecurringTransaction recurring) =>
-        recurring.Note is not null
-            ? recurring.Note + " (авто)"
-            : recurring.Type == TransactionType.Income ? "Авто-доход" : "Авто-расход";
 }

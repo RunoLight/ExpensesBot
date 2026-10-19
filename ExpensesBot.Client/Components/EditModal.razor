@@ -1,32 +1,33 @@
-<Modal Title="@(Form.Type == TransactionType.Income ? "Редактировать доход" : "Редактировать расход")" OnClose="OnClose">
+<Modal Title="@(Form.Type == TransactionType.Income ? T.EditIncome : T.EditExpense)" OnClose="OnClose">
     <EditForm Model="Form" OnValidSubmit="OnSave">
         <TypeToggle @bind-Value="Form.Type" />
 
         <div class="form-row">
             <div class="form-group">
-                <label for="edit-amount">Сумма</label>
+                <label for="edit-amount">@T.Amount</label>
                 <InputNumber id="edit-amount" class="form-control" @bind-Value="Form.Amount" />
             </div>
             <div class="form-group">
-                <label for="edit-currency">Валюта</label>
+                <label for="edit-currency">@T.Currency</label>
                 <CurrencySelect Id="edit-currency" @bind-Value="Form.Currency" />
             </div>
         </div>
 
-        <label for="edit-category">Категория</label>
+        <label for="edit-category">@T.Category</label>
         <CategorySelect Id="edit-category" Categories="Categories" @bind-Value="Form.CategoryId" />
 
-        <label for="edit-note">Комментарий</label>
-        <InputText id="edit-note" class="form-control" @bind-Value="Form.Note" placeholder="Комментарий" />
+        <label for="edit-note">@T.Note</label>
+        <InputText id="edit-note" class="form-control" @bind-Value="Form.Note" placeholder="@T.Note" />
 
         <div class="modal-card__actions">
-            <button class="btn btn--primary" type="submit" disabled="@Saving">Сохранить</button>
-            <button class="btn btn--secondary" type="button" @onclick="OnClose">Отмена</button>
+            <button class="btn btn--primary" type="submit" disabled="@Saving">@T.Save</button>
+            <button class="btn btn--secondary" type="button" @onclick="OnClose">@T.Cancel</button>
         </div>
     </EditForm>
 </Modal>
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     /// <summary>
     /// Form state owned by the parent page. The parent reads these values when
     /// <see cref="OnSave"/> fires, so the modal binds to this instance

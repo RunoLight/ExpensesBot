@@ -23,7 +23,7 @@ public sealed class NotificationLedgerTests : IDisposable
         new(new DbContextOptionsBuilder<ExpensesDbContext>().UseSqlite(_connection).Options);
 
     private static OutboxMessage Message(long userId, DateTime nowUtc) =>
-        OutboxMessage.Create(userId, NotificationTexts.DailyReminderKind, "text", nowUtc);
+        OutboxMessage.Create(userId, OutboxKind.DailyReminder, "text", nowUtc);
 
     private async Task<long> AddUserAsync(long telegramUserId)
     {

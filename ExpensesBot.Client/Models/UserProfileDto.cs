@@ -5,4 +5,5 @@ public sealed record UserProfileDto(
     string? DisplayName,
     string DefaultCurrency,
     long TotalTransactions,
-    long TotalCategories);
+    long TotalCategories,
+    string Language = "en");

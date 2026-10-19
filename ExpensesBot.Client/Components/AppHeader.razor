@@ -1,28 +1,31 @@
 <header class="app-header">
     <div>
-        <div class="eyebrow">Личные финансы</div>
-        <h1>Мои финансы</h1>
+        <div class="eyebrow">@T.AppEyebrow</div>
+        <h1>@T.AppTitle</h1>
     </div>
     <div class="app-header__actions">
         <CurrencySelect CssClass="currency-select"
-                        Title="Основная валюта: в ней показываются итоги и приходят уведомления"
+                        Title="@T.CurrencyTitle"
                         Value="@Currency"
                         ValueChanged="OnCurrencyChanged" />
-        <button type="button" class="btn-icon" title="Как это работает" @onclick="OnHelp">❔</button>
-        <button type="button" class="btn-icon" title="@(DarkTheme ? "Светлая тема" : "Тёмная тема")" @onclick="OnToggleTheme">
+        <button type="button" class="btn-icon" title="@T.Help" @onclick="OnHelp">❔</button>
+        <button type="button" class="btn-icon btn-icon--text" title="@T.SwitchLanguage" @onclick="OnToggleLanguage">@T.OtherLanguageCode</button>
+        <button type="button" class="btn-icon" title="@(DarkTheme ? T.LightTheme : T.DarkTheme)" @onclick="OnToggleTheme">
             @(DarkTheme ? "☀️" : "🌙")
         </button>
-        <button type="button" class="btn-icon" title="Импорт CSV" @onclick="OnImport">📥</button>
-        <button type="button" class="btn-icon" title="Удалить аккаунт" @onclick="OnDeleteAccount">🗑️</button>
+        <button type="button" class="btn-icon" title="@T.ImportCsv" @onclick="OnImport">📥</button>
+        <button type="button" class="btn-icon" title="@T.DeleteAccount" @onclick="OnDeleteAccount">🗑️</button>
     </div>
 </header>
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter] public string Currency { get; set; } = "AMD";
     [Parameter] public bool DarkTheme { get; set; }
 
     [Parameter] public EventCallback<string> OnCurrencyChanged { get; set; }
     [Parameter] public EventCallback OnHelp { get; set; }
+    [Parameter] public EventCallback OnToggleLanguage { get; set; }
     [Parameter] public EventCallback OnToggleTheme { get; set; }
     [Parameter] public EventCallback OnImport { get; set; }
     [Parameter] public EventCallback OnDeleteAccount { get; set; }

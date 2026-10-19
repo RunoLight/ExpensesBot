@@ -6,7 +6,7 @@
             var periods = PeriodRows.Where(p => !string.IsNullOrEmpty(p.Period)).Take(6).ToList();
             var maxPeriod = periods.Select(p => p.TotalAmountMinor).DefaultIfEmpty(0).Max();
 
-            <h2>По периодам</h2>
+            <h2>@T.ByPeriod</h2>
             <div class="bar-chart">
                 @foreach (var period in periods)
                 {
@@ -23,7 +23,7 @@
             var categories = CategoryRows.Take(8).ToList();
             var maxCategory = categories.Max(c => c.TotalAmountMinor);
 
-            <h2>По категориям</h2>
+            <h2>@T.ByCategory</h2>
             <div class="bar-chart">
                 @foreach (var row in categories)
                 {
@@ -34,7 +34,7 @@
                 }
             </div>
 
-            <h2>Структура расходов</h2>
+            <h2>@T.SpendingStructure</h2>
             <PieChart Slices="Slices" />
         }
     </section>
@@ -44,8 +44,7 @@
     private static readonly string[] Palette =
         ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40", "#E7759A", "#C9CBCF", "#7BC67E", "#8C6D46"];
 
-    private static readonly string[] MonthNames =
-        ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
 
     [Parameter] public List<PeriodTotalDto> PeriodRows { get; set; } = [];
     [Parameter] public List<CategoryTotalDto> CategoryRows { get; set; } = [];
@@ -57,12 +56,13 @@
             .Select((row, i) => new PieChart.Slice(row.CategoryName, row.TotalAmountMinor, Palette[i]))
             .ToList();
 
-    /// <summary>"2026-10" → "Окт 2026".</summary>
-    private static string FormatPeriod(string period)
+    /// <summary>"2026-10" → "Oct 2026".</summary>
+    private string FormatPeriod(string period)
     {
         var parts = period.Split('-');
-        return parts.Length == 2 && int.TryParse(parts[1], out var month) && month is >= 1 and <= 12
-            ? $"{MonthNames[month - 1]} {parts[0]}"
+        return parts.Length == 2 && int.TryParse(parts[0], out var year) &&
+               int.TryParse(parts[1], out var month) && month is >= 1 and <= 12
+            ? T.MonthYear(year, month)
             : period;
     }
 }

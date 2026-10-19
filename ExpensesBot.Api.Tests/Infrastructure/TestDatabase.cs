@@ -23,10 +23,10 @@ public sealed class TestDatabase : IDisposable
     public ExpensesDbContext CreateContext() =>
         new(new DbContextOptionsBuilder<ExpensesDbContext>().UseSqlite(_connection).Options);
 
-    public async Task<User> AddUserAsync(long telegramUserId = 1)
+    public async Task<User> AddUserAsync(long telegramUserId = 1, string? language = null)
     {
         await using var db = CreateContext();
-        var user = UserFactory.Create(telegramUserId, $"User {telegramUserId}");
+        var user = UserFactory.Create(telegramUserId, $"User {telegramUserId}", language);
         db.Users.Add(user);
         await db.SaveChangesAsync();
         return user;

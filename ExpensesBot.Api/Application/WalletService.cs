@@ -51,6 +51,8 @@ public sealed class WalletService(ExpensesDbContext db, ExchangeRateProvider exc
         if (await RoleAsync(userId, walletId, ct) is not { } role)
             return Error.NotFound();
 
+        var text = await db.TextForAsync(userId, ct);
+
         var wallet = await db.Wallets
             .AsNoTracking()
             .FirstAsync(w => w.Id == walletId, ct);
@@ -71,7 +73,7 @@ public sealed class WalletService(ExpensesDbContext db, ExchangeRateProvider exc
             wallet.CreatedAtUtc,
             members
                 .Select(m => new WalletMemberResponse(
-                    m.UserId, DisplayName(m.UserId, m.DisplayName), m.Role.ToString(), m.JoinedAtUtc, m.UserId == userId))
+                    m.UserId, DisplayName(m.UserId, m.DisplayName, text), m.Role.ToString(), m.JoinedAtUtc, m.UserId == userId))
                 .ToList());
     }
 
@@ -192,6 +194,8 @@ public sealed class WalletService(ExpensesDbContext db, ExchangeRateProvider exc
         if (await RoleAsync(userId, walletId, ct) is null)
             return Error.NotFound();
 
+        var text = await db.TextForAsync(userId, ct);
+
         var rows = await db.Transactions
             .AsNoTracking()
             .Where(t => t.WalletId == walletId)
@@ -218,7 +222,7 @@ public sealed class WalletService(ExpensesDbContext db, ExchangeRateProvider exc
             .Select(t => new WalletTransactionResponse(
                 t.Id,
                 t.UserId,
-                DisplayName(t.UserId, t.DisplayName),
+                DisplayName(t.UserId, t.DisplayName, text),
                 t.UserId == userId,
                 t.AmountMinor,
                 t.Currency,
@@ -240,6 +244,8 @@ public sealed class WalletService(ExpensesDbContext db, ExchangeRateProvider exc
     {
         if (await RoleAsync(userId, walletId, ct) is null)
             return Error.NotFound();
+
+        var text = await db.TextForAsync(userId, ct);
 
         var target = Currencies.TryNormalize(currency, out var requested)
             ? requested
@@ -294,7 +300,7 @@ public sealed class WalletService(ExpensesDbContext db, ExchangeRateProvider exc
                 var own = converted.Where(r => r.UserId == member.UserId).ToList();
                 return new WalletMemberTotal(
                     member.UserId,
-                    DisplayName(member.UserId, member.DisplayName),
+                    DisplayName(member.UserId, member.DisplayName, text),
                     own.Where(r => r.Type == TransactionType.Income).Sum(r => r.Amount),
                     own.Where(r => r.Type == TransactionType.Expense).Sum(r => r.Amount),
                     own.Count);
@@ -304,7 +310,7 @@ public sealed class WalletService(ExpensesDbContext db, ExchangeRateProvider exc
 
         var byCategory = converted
             .Where(r => r.Type == TransactionType.Expense)
-            .GroupBy(r => r.CategoryName ?? TransactionService.NoCategoryName)
+            .GroupBy(r => r.CategoryName ?? text.NoCategory)
             .Select(g => new WalletCategoryTotal(g.Key, g.Sum(r => r.Amount)))
             .OrderByDescending(x => x.ExpenseMinor)
             .ToList();
@@ -373,6 +379,6 @@ public sealed class WalletService(ExpensesDbContext db, ExchangeRateProvider exc
             : null;
     }
 
-    private static string DisplayName(long userId, string? displayName) =>
-        string.IsNullOrWhiteSpace(displayName) ? $"Участник {userId}" : displayName;
+    private static string DisplayName(long userId, string? displayName, MessageText text) =>
+        string.IsNullOrWhiteSpace(displayName) ? text.MemberFallbackName(userId) : displayName;
 }

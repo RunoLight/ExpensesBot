@@ -7,7 +7,8 @@ namespace ExpensesBot.Api.Authentication;
 /// <summary>Finds the local user for a Telegram account or creates it with default settings.</summary>
 public sealed class UserProvisioning(ExpensesDbContext db)
 {
-    public async Task<User> FindOrCreateAsync(long telegramUserId, string? displayName, CancellationToken ct)
+    /// <param name="languageCode">Telegram's language_code; sets the language of a new account.</param>
+    public async Task<User> FindOrCreateAsync(long telegramUserId, string? displayName, string? languageCode, CancellationToken ct)
     {
         var user = await db.Users
             .AsNoTracking()
@@ -16,7 +17,7 @@ public sealed class UserProvisioning(ExpensesDbContext db)
         if (user is not null)
             return user;
 
-        user = UserFactory.Create(telegramUserId, displayName);
+        user = UserFactory.Create(telegramUserId, displayName, Languages.FromTelegram(languageCode));
         db.Users.Add(user);
 
         try

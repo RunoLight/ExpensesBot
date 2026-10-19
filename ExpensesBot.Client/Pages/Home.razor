@@ -1,7 +1,7 @@
 @page "/"
 @using System.Globalization
 
-<PageTitle>Мои финансы</PageTitle>
+<PageTitle>@T.AppTitle</PageTitle>
 
 <div class="expenses-app @(darkTheme ? "dark" : null)">
     <div class="app-shell">
@@ -9,6 +9,7 @@
                    DarkTheme="darkTheme"
                    OnCurrencyChanged="ChangeCurrencyAsync"
                    OnHelp="() => dialog = Dialog.Help"
+                   OnToggleLanguage="ToggleLanguageAsync"
                    OnToggleTheme="ToggleThemeAsync"
                    OnImport="() => dialog = Dialog.Import"
                    OnDeleteAccount="() => dialog = Dialog.DeleteAccount" />
@@ -20,7 +21,7 @@
 
         @if (loading)
         {
-            <p class="muted">Загружаем данные...</p>
+            <p class="muted">@T.Loading</p>
         }
         else
         {
@@ -122,7 +123,10 @@
 
     private enum Dialog { None, Help, Import, DeleteAccount, Edit }
 
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
+
     [Inject] private ExpensesApiClient Api { get; set; } = null!;
+    [Inject] private LanguageState Language { get; set; } = null!;
     [Inject] private TelegramService Telegram { get; set; } = null!;
     [Inject] private IJSRuntime JS { get; set; } = null!;
     [Inject] private Microsoft.Extensions.Configuration.IConfiguration Configuration { get; set; } = null!;
@@ -160,17 +164,22 @@
     {
         await TryJsAsync(async () => await Telegram.ReadyAsync());
         await LoadThemeAsync();
+
+        // Until the profile arrives, speak the language of the user's Telegram app.
+        await TryJsAsync(async () => Language.Set(UiText.LanguageFromTelegram(await Telegram.GetLanguageCodeAsync())));
         await ApplyStartParameterAsync();
         botUsername = Configuration["BotUsername"];
 
         try
         {
-            currency = (await Api.GetProfileAsync()).DefaultCurrency;
+            var profile = await Api.GetProfileAsync();
+            currency = profile.DefaultCurrency;
             form.Currency = currency;
+            Language.Set(profile.Language);
         }
         catch (Exception ex)
         {
-            error = $"Не удалось загрузить профиль: {ex.Message}";
+            error = T.WithReason(T.ErrorLoadProfile, ex.Message);
         }
 
         await LoadAsync();
@@ -222,7 +231,7 @@
         }
         catch (Exception ex)
         {
-            error = $"Не удалось загрузить данные: {ex.Message}";
+            error = T.WithReason(T.ErrorLoadData, ex.Message);
         }
         finally
         {
@@ -230,7 +239,7 @@
         }
     }
 
-    private Task RefreshAsync() => RunAsync(LoadAsync, "Не удалось обновить");
+    private Task RefreshAsync() => RunAsync(LoadAsync, T.ErrorRefresh);
 
     /// <summary>
     /// Reloads only the summary. Responses for a period the user has already
@@ -250,7 +259,7 @@
         catch (Exception ex)
         {
             if (request == summaryRequest)
-                error = $"Не удалось обновить сводку: {ex.Message}";
+                error = T.WithReason(T.ErrorRefreshSummary, ex.Message);
         }
         finally
         {
@@ -276,7 +285,19 @@
             currency = value;
             form.Currency = value;
             await ReloadSummaryAsync();
-        }, "Не удалось сменить валюту");
+        }, T.ErrorChangeCurrency);
+
+    /// <summary>The language is saved in the profile: the bot and notifications use it too.</summary>
+    private Task ToggleLanguageAsync()
+    {
+        var language = T.IsRussian ? UiText.English : UiText.Russian;
+
+        return RunAsync(async () =>
+        {
+            await Api.SetLanguageAsync(language);
+            Language.Set(language);
+        }, T.ErrorChangeLanguage);
+    }
 
     private void CloseDialog()
     {
@@ -302,7 +323,7 @@
             selectedTagIds.Clear();
             form = new TransactionFormModel { Currency = form.Currency, Type = form.Type, WalletId = form.WalletId };
             await LoadAsync();
-        }, "Не удалось сохранить операцию");
+        }, T.ErrorSaveTransaction);
     }
 
     private void OpenEdit(TransactionDto transaction)
@@ -332,7 +353,7 @@
             // Budgets, goals and the summary depend on transactions, so reload everything.
             CloseDialog();
             await LoadAsync();
-        }, "Не удалось обновить операцию");
+        }, T.ErrorUpdateTransaction);
     }
 
     private Task DeleteTransactionAsync(long id) =>
@@ -340,7 +361,7 @@
         {
             await Api.DeleteTransactionAsync(id);
             await LoadAsync();
-        }, "Не удалось удалить операцию");
+        }, T.ErrorDeleteTransaction);
 
     private Task ExportCsvAsync() =>
         RunAsync(async () =>
@@ -348,7 +369,7 @@
             var bytes = await Api.ExportCsvAsync();
             if (bytes.Length > 0)
                 await JS.InvokeVoidAsync("expensesUtils.downloadCsv", bytes, $"expenses_{DateTime.Now:yyyyMMdd}.csv");
-        }, "Не удалось экспортировать");
+        }, T.ErrorExport);
 
     // Recurring transactions
 
@@ -362,7 +383,7 @@
             await Api.CreateRecurringTransactionAsync(
                 amountMinor, rule.Currency, rule.CategoryId, rule.Note, rule.Pattern, rule.Type);
             recurringTransactions = await Api.GetRecurringTransactionsAsync();
-        }, "Не удалось создать повторяющуюся операцию");
+        }, T.ErrorCreateRecurring);
     }
 
     private Task ExecuteRecurringAsync(long id) =>
@@ -370,14 +391,14 @@
         {
             await Api.ExecuteRecurringTransactionAsync(id);
             await LoadAsync();
-        }, "Не удалось выполнить");
+        }, T.ErrorRunRecurring);
 
     private Task DeleteRecurringAsync(long id) =>
         RunAsync(async () =>
         {
             await Api.DeleteRecurringTransactionAsync(id);
             recurringTransactions.RemoveAll(r => r.Id == id);
-        }, "Не удалось удалить");
+        }, T.ErrorDelete);
 
     // Categories
 
@@ -385,13 +406,13 @@
     {
         if (string.IsNullOrWhiteSpace(category.Name))
         {
-            error = "Введите название категории.";
+            error = T.EnterCategoryName;
             return false;
         }
 
         return await RunAsync(
             async () => categories.Add(await Api.CreateCategoryAsync(category.Name, category.Icon)),
-            "Не удалось создать категорию");
+            T.ErrorCreateCategory);
     }
 
     private Task DeleteCategoryAsync(long id) =>
@@ -399,7 +420,7 @@
         {
             await Api.DeleteCategoryAsync(id);
             await LoadAsync();
-        }, "Не удалось удалить категорию");
+        }, T.ErrorDeleteCategory);
 
     private Task ArchiveCategoryAsync(long id) =>
         RunAsync(async () =>
@@ -408,7 +429,7 @@
             var index = categories.FindIndex(c => c.Id == id);
             if (index >= 0)
                 categories[index] = updated;
-        }, "Не удалось архивировать");
+        }, T.ErrorArchive);
 
     // Budgets and goals
 
@@ -423,7 +444,7 @@
                 amountMinor, budget.Currency, budget.CategoryId,
                 BudgetStartUtc(budget), BudgetEndUtc(budget));
             budgets = await Api.GetBudgetsAsync();
-        }, "Не удалось создать бюджет");
+        }, T.ErrorCreateBudget);
     }
 
     private async Task<bool> UpdateBudgetAsync(long id, BudgetForm budget)
@@ -437,7 +458,7 @@
                 id, amountMinor, budget.Currency, budget.CategoryId,
                 BudgetStartUtc(budget), BudgetEndUtc(budget));
             budgets = await Api.GetBudgetsAsync();
-        }, "Не удалось изменить бюджет");
+        }, T.ErrorUpdateBudget);
     }
 
     private bool TryValidateBudget(BudgetForm budget, out long amountMinor)
@@ -447,7 +468,7 @@
 
         if (budget.EndDate <= budget.StartDate)
         {
-            error = "Дата окончания должна быть позже даты начала.";
+            error = T.EndAfterStart;
             return false;
         }
 
@@ -466,13 +487,13 @@
         {
             await Api.DeleteBudgetAsync(id);
             budgets.RemoveAll(b => b.Id == id);
-        }, "Не удалось удалить бюджет");
+        }, T.ErrorDeleteBudget);
 
     private async Task<bool> AddGoalAsync(GoalForm goal)
     {
         if (string.IsNullOrWhiteSpace(goal.Name))
         {
-            error = "Введите название цели.";
+            error = T.EnterGoalName;
             return false;
         }
 
@@ -486,14 +507,14 @@
             // A goal without a category gets its own one, so refresh both.
             goals = await Api.GetGoalsAsync();
             categories = await Api.GetCategoriesAsync();
-        }, "Не удалось создать цель");
+        }, T.ErrorCreateGoal);
     }
 
     private async Task<bool> UpdateGoalAsync(long id, GoalForm goal)
     {
         if (string.IsNullOrWhiteSpace(goal.Name))
         {
-            error = "Введите название цели.";
+            error = T.EnterGoalName;
             return false;
         }
 
@@ -506,7 +527,7 @@
             var index = goals.FindIndex(g => g.Id == id);
             if (index >= 0)
                 goals[index] = updated;
-        }, "Не удалось изменить цель");
+        }, T.ErrorUpdateGoal);
     }
 
     private Task DeleteGoalAsync(long id) =>
@@ -514,14 +535,14 @@
         {
             await Api.DeleteGoalAsync(id);
             goals.RemoveAll(g => g.Id == id);
-        }, "Не удалось удалить цель");
+        }, T.ErrorDeleteGoal);
 
     private Task ContributeToGoalAsync(GoalContribution contribution) =>
         RunAsync(async () =>
         {
             await Api.ContributeToGoalAsync(contribution.GoalId, contribution.AmountMinor);
             await LoadAsync();
-        }, "Не удалось внести вклад");
+        }, T.ErrorContribute);
 
     // Tags
 
@@ -535,18 +556,18 @@
     {
         if (string.IsNullOrWhiteSpace(tag.Name))
         {
-            error = "Введите название тега.";
+            error = T.EnterTagName;
             return;
         }
 
-        await RunAsync(async () => tags.Add(await Api.CreateTagAsync(tag.Name, tag.Color)), "Не удалось создать тег");
+        await RunAsync(async () => tags.Add(await Api.CreateTagAsync(tag.Name, tag.Color)), T.ErrorCreateTag);
     }
 
     private async Task<bool> UpdateTagAsync(TagEdit edit)
     {
         if (string.IsNullOrWhiteSpace(edit.Form.Name))
         {
-            error = "Введите название тега.";
+            error = T.EnterTagName;
             return false;
         }
 
@@ -556,7 +577,7 @@
             var index = tags.FindIndex(t => t.Id == edit.Id);
             if (index >= 0)
                 tags[index] = updated;
-        }, "Не удалось изменить тег");
+        }, T.ErrorUpdateTag);
     }
 
     private Task DeleteTagAsync(long id) =>
@@ -565,7 +586,7 @@
             await Api.DeleteTagAsync(id);
             tags.RemoveAll(t => t.Id == id);
             selectedTagIds.Remove(id);
-        }, "Не удалось удалить тег");
+        }, T.ErrorDeleteTag);
 
     // Shared wallets
 
@@ -573,7 +594,7 @@
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            error = "Введите название кошелька.";
+            error = T.EnterWalletName;
             return false;
         }
 
@@ -581,14 +602,14 @@
         {
             await Api.CreateWalletAsync(name);
             wallets = await Api.GetWalletsAsync();
-        }, "Не удалось создать кошелёк");
+        }, T.ErrorCreateWallet);
     }
 
     private async Task<bool> JoinWalletAsync(string code)
     {
         if (string.IsNullOrWhiteSpace(code))
         {
-            error = "Введите код приглашения.";
+            error = T.EnterInviteCode;
             return false;
         }
 
@@ -596,7 +617,7 @@
         {
             await Api.JoinWalletAsync(code);
             wallets = await Api.GetWalletsAsync();
-        }, "Не удалось присоединиться");
+        }, T.ErrorJoin);
     }
 
     private async Task<WalletView?> LoadWalletViewAsync(long id)
@@ -607,7 +628,7 @@
         }
         catch (Exception ex)
         {
-            error = $"Не удалось загрузить кошелёк: {ex.Message}";
+            error = T.WithReason(T.ErrorLoadWallet, ex.Message);
             StateHasChanged();
             return null;
         }
@@ -618,28 +639,28 @@
         {
             await Api.RegenerateWalletInviteAsync(id);
             wallets = await Api.GetWalletsAsync();
-        }, "Не удалось сменить код");
+        }, T.ErrorRegenerate);
 
     private Task<bool> RemoveWalletMemberAsync(WalletMemberRemoval removal) =>
         RunAsync(async () =>
         {
             await Api.RemoveWalletMemberAsync(removal.WalletId, removal.UserId);
             wallets = await Api.GetWalletsAsync();
-        }, "Не удалось исключить участника");
+        }, T.ErrorRemoveMember);
 
     private Task LeaveWalletAsync(long id) =>
         RunAsync(async () =>
         {
             await Api.LeaveWalletAsync(id);
             await LoadAsync();
-        }, "Не удалось выйти из кошелька");
+        }, T.ErrorLeave);
 
     private Task DeleteWalletAsync(long id) =>
         RunAsync(async () =>
         {
             await Api.DeleteWalletAsync(id);
             await LoadAsync();
-        }, "Не удалось удалить кошелёк");
+        }, T.ErrorDeleteWallet);
 
     /// <summary>Opens the app through t.me/your_bot/app?startapp=join_ABCD2345: joins that wallet.</summary>
     private async Task<bool> JoinWalletFromStartParameterAsync()
@@ -657,7 +678,7 @@
         }
         catch (Exception ex)
         {
-            error = $"Не удалось присоединиться к кошельку: {ex.Message}";
+            error = T.WithReason(T.ErrorJoinFromLink, ex.Message);
             return false;
         }
     }
@@ -673,7 +694,7 @@
             // The next request creates a fresh account with default categories.
             currency = (await Api.GetProfileAsync()).DefaultCurrency;
             await LoadAsync();
-        }, "Не удалось удалить аккаунт");
+        }, T.ErrorDeleteAccount);
 
     // Theme and Telegram integration
 
@@ -728,13 +749,13 @@
 
         if (amountMinor <= 0)
         {
-            error = "Сумма должна быть больше нуля.";
+            error = T.AmountMustBePositive;
             return false;
         }
 
         if (amount > 1_000_000_000)
         {
-            error = "Слишком большая сумма.";
+            error = T.AmountTooLarge;
             return false;
         }
 
@@ -760,7 +781,7 @@
         }
         catch (Exception ex)
         {
-            error = $"{errorPrefix}: {ex.Message}";
+            error = T.WithReason(errorPrefix, ex.Message);
             return false;
         }
         finally

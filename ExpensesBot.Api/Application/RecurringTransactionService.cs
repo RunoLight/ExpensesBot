@@ -170,7 +170,7 @@ public sealed class RecurringTransactionService(ExpensesDbContext db, TimeProvid
             AmountMinor = recurring.AmountMinor,
             Currency = recurring.Currency,
             Type = recurring.Type,
-            Note = AutoNote(recurring),
+            Note = (await db.TextForAsync(userId, ct)).AutoNote(recurring.Note, recurring.Type),
             OccurredAtUtc = now,
             CreatedAtUtc = now
         };
@@ -192,12 +192,6 @@ public sealed class RecurringTransactionService(ExpensesDbContext db, TimeProvid
             (ContractTransactionType)transaction.Type,
             []);
     }
-
-    /// <summary>Same wording as the Worker uses for scheduled runs.</summary>
-    public static string AutoNote(RecurringTransaction recurring) =>
-        recurring.Note is not null
-            ? recurring.Note + " (авто)"
-            : recurring.Type == TransactionType.Income ? "Авто-доход" : "Авто-расход";
 
     private async Task<Category?> FindCategoryAsync(long userId, long? categoryId, CancellationToken ct) =>
         categoryId is null

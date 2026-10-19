@@ -238,6 +238,13 @@ h2 {
     border-color: var(--color-primary);
 }
 
+/* Round button with a short label instead of an emoji (the RU / EN switch) */
+.btn-icon--text {
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--color-text);
+}
+
 .btn-icon--sm {
     width: 28px;
     height: 28px;

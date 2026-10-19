@@ -1,20 +1,20 @@
 <section class="panel">
-    <PanelHeader Title="Бюджеты" AddTitle="Новый бюджет" FormOpen="showForm" OnToggleForm="ToggleForm" />
+    <PanelHeader Title="@T.Budgets" AddTitle="@T.NewBudget" FormOpen="showForm" OnToggleForm="ToggleForm" />
 
     @foreach (var budget in Items)
     {
         <ProgressCard @key="budget.Id"
-                      Title="@($"{budget.CategoryIcon ?? "💰"} {budget.CategoryName ?? "Общий"}")"
+                      Title="@($"{budget.CategoryIcon ?? "💰"} {budget.CategoryName ?? T.OverallBudget}")"
                       Amount="@($"{Money.Format(budget.SpentAmountMinor)} / {Money.Format(budget.AmountMinor)} {budget.Currency}")"
                       Percent="budget.ProgressPercent"
                       Color="ColorFor(budget.ProgressPercent)"
                       OnEdit="() => StartEdit(budget)"
                       OnDelete="() => ConfirmAndDeleteAsync(budget)">
             <Footer>
-                <span>@budget.StartDateUtc.ToString("dd.MM") – @budget.EndDateUtc.ToString("dd.MM.yyyy")</span>
+                <span>@T.DateRange(budget.StartDateUtc, budget.EndDateUtc)</span>
                 @if (budget.ProgressPercent >= 100)
                 {
-                    <span class="card__alert">⚠️ Превышен!</span>
+                    <span class="card__alert">@T.Exceeded</span>
                 }
             </Footer>
         </ProgressCard>
@@ -25,34 +25,35 @@
         <EditForm Model="form" OnValidSubmit="SubmitAsync">
             <div class="form-row">
                 <div class="form-group">
-                    <label for="budget-amount">Лимит</label>
+                    <label for="budget-amount">@T.Limit</label>
                     <InputNumber id="budget-amount" class="form-control" @bind-Value="form.Amount" />
                 </div>
                 <div class="form-group">
-                    <label for="budget-currency">Валюта</label>
+                    <label for="budget-currency">@T.Currency</label>
                     <CurrencySelect Id="budget-currency" @bind-Value="form.Currency" />
                 </div>
             </div>
 
-            <label for="budget-category">Категория</label>
-            <CategorySelect Id="budget-category" Categories="Categories" EmptyLabel="Общий (без категории)" @bind-Value="form.CategoryId" />
+            <label for="budget-category">@T.Category</label>
+            <CategorySelect Id="budget-category" Categories="Categories" EmptyLabel="@T.OverallBudgetOption" @bind-Value="form.CategoryId" />
 
             <div class="form-row">
                 <div class="form-group">
-                    <label for="budget-start">С</label>
+                    <label for="budget-start">@T.From</label>
                     <InputDate id="budget-start" class="form-control" @bind-Value="form.StartDate" />
                 </div>
                 <div class="form-group">
-                    <label for="budget-end">По</label>
+                    <label for="budget-end">@T.To</label>
                     <InputDate id="budget-end" class="form-control" @bind-Value="form.EndDate" />
                 </div>
             </div>
-            <button class="btn btn--primary" type="submit" disabled="@Saving">@(editingId is null ? "Создать бюджет" : "Сохранить")</button>
+            <button class="btn btn--primary" type="submit" disabled="@Saving">@(editingId is null ? T.CreateBudget : T.Save)</button>
         </EditForm>
     }
 </section>
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter] public List<BudgetDto> Items { get; set; } = [];
     [Parameter] public List<CategoryDto> Categories { get; set; } = [];
     [Parameter] public bool Saving { get; set; }
@@ -101,7 +102,7 @@
 
     private async Task ConfirmAndDeleteAsync(BudgetDto budget)
     {
-        if (await JS.ConfirmAsync($"Удалить бюджет «{budget.CategoryName ?? "Общий"}»?"))
+        if (await JS.ConfirmAsync(T.ConfirmDeleteBudget(budget.CategoryName ?? T.OverallBudget)))
             await OnDelete.InvokeAsync(budget.Id);
     }
 

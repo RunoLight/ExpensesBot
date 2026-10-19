@@ -1,6 +1,6 @@
 <section class="summary-card @(Loading ? "summary-card--loading" : null)" aria-busy="@(Loading ? "true" : "false")">
-    <div class="summary-card__periods" role="tablist" aria-label="Период">
-        @foreach (var (value, label) in Periods)
+    <div class="summary-card__periods" role="tablist" aria-label="@T.Period">
+        @foreach (var (value, label) in Periods())
         {
             <button type="button"
                     role="tab"
@@ -13,7 +13,7 @@
     </div>
 
     <div class="summary-card__balance">
-        <div class="summary-card__label">Баланс</div>
+        <div class="summary-card__label">@T.Balance</div>
         <div class="summary-card__balance-amount @(Summary.BalanceMinor >= 0 ? "positive" : "negative")">
             @Money.Format(Summary.BalanceMinor) @Summary.Currency
         </div>
@@ -22,11 +22,11 @@
 
     <div class="summary-card__totals">
         <div class="summary-card__total summary-card__total--income">
-            <div class="summary-card__label">📈 Доходы</div>
+            <div class="summary-card__label">@T.IncomeTotal</div>
             <div class="summary-card__amount">+@Money.Format(Summary.TotalIncomeMinor) @Summary.Currency</div>
         </div>
         <div class="summary-card__total summary-card__total--expense">
-            <div class="summary-card__label">📉 Расходы</div>
+            <div class="summary-card__label">@T.ExpenseTotal</div>
             <div class="summary-card__amount">-@Money.Format(Summary.TotalExpenseMinor) @Summary.Currency</div>
         </div>
     </div>
@@ -37,14 +37,14 @@
             @switch (SummaryMode)
             {
                 case "month":
-                    <div><dt>В среднем в день</dt><dd>@FormatStat(Summary.AveragePerDay)</dd></div>
-                    <div><dt>Прогноз расходов на месяц</dt><dd>@FormatStat(Summary.ProjectedMonthly)</dd></div>
+                    <div><dt>@T.AveragePerDay</dt><dd>@FormatStat(Summary.AveragePerDay)</dd></div>
+                    <div><dt>@T.MonthlyProjection</dt><dd>@FormatStat(Summary.ProjectedMonthly)</dd></div>
                     break;
                 case "30days":
-                    <div><dt>В среднем в день</dt><dd>@FormatStat(Summary.AveragePerDay)</dd></div>
+                    <div><dt>@T.AveragePerDay</dt><dd>@FormatStat(Summary.AveragePerDay)</dd></div>
                     break;
                 default:
-                    <div><dt>Расходы за последние 30 дней</dt><dd>@FormatStat(Summary.ProjectedMonthly)</dd></div>
+                    <div><dt>@T.Last30DaysSpending</dt><dd>@FormatStat(Summary.ProjectedMonthly)</dd></div>
                     break;
             }
         </dl>
@@ -52,20 +52,19 @@
 
     @if (Summary.UsesFallbackRates && Summary.TotalsByCurrency.Count > 1)
     {
-        <p class="summary-card__note">Курсы валют приблизительные — свежие курсы ещё не загружены.</p>
+        <p class="summary-card__note">@T.ApproximateRates</p>
     }
 </section>
 
 @code {
-    private static readonly (string Value, string Label)[] Periods =
-    [
-        ("month", "Этот месяц"),
-        ("30days", "30 дней"),
-        ("all", "Всё время")
-    ];
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
 
-    private static readonly string[] Months =
-        ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+    private (string Value, string Label)[] Periods() =>
+    [
+        ("month", T.ThisMonth),
+        ("30days", T.Last30Days),
+        ("all", T.AllTime)
+    ];
 
     /// <summary>All amounts are already converted to <c>Summary.Currency</c> by the API.</summary>
     [Parameter] public UserSummaryDto Summary { get; set; } = UserSummaryDto.Empty("AMD");
@@ -78,26 +77,20 @@
     /// <summary>Overridable for tests; defaults to the device's local date.</summary>
     [Parameter] public DateTime Today { get; set; } = DateTime.Today;
 
-    /// <summary>"1 окт – 16 окт 2026" for the selected period.</summary>
+    /// <summary>"1 Oct – 16 Oct 2026" for the selected period.</summary>
     private string RangeText => SummaryMode switch
     {
-        "month" => $"{FormatDay(new DateTime(Today.Year, Today.Month, 1))} – {FormatDay(Today)} {Today.Year}",
-        "30days" => $"{FormatDay(Today.AddDays(-30))} – {FormatDay(Today)} {Today.Year}",
-        _ => "за всё время"
+        "month" => $"{T.DayMonth(new DateTime(Today.Year, Today.Month, 1))} – {T.DayMonth(Today)} {Today.Year}",
+        "30days" => $"{T.DayMonth(Today.AddDays(-30))} – {T.DayMonth(Today)} {Today.Year}",
+        _ => T.AllTimeRange
     };
 
     private string OperationsText => Summary.TotalTransactions switch
     {
-        0 => "операций нет",
-        var n => $"{n} {Plural(n, "операция", "операции", "операций")}"
+        0 => T.NoOperations,
+        var n => T.Operations(n)
     };
 
     private string FormatStat(double amountMinor) =>
         $"{Money.Format((long)amountMinor)} {Summary.Currency}";
-
-    private static string FormatDay(DateTime date) => $"{date.Day} {Months[date.Month - 1]}";
-
-    private static string Plural(long n, string one, string few, string many) =>
-        (n % 100) is >= 11 and <= 14 ? many
-        : (n % 10) switch { 1 => one, >= 2 and <= 4 => few, _ => many };
 }

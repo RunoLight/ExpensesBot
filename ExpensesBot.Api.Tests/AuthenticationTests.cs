@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using ExpensesBot.Api.Contracts.Categories;
 using ExpensesBot.Api.Contracts.Profile;
 using ExpensesBot.Api.Tests.Infrastructure;
 using FluentAssertions;
@@ -47,6 +48,22 @@ public class AuthenticationTests(ProductionWebApplicationFactory factory)
         profile!.DisplayName.Should().Be("Анна");
         profile.DefaultCurrency.Should().Be("AMD");
         profile.TotalCategories.Should().BeGreaterThan(0);
+    }
+
+    [Theory]
+    [InlineData(700_101, "ru", "ru", "Продукты")]
+    [InlineData(700_102, "en", "en", "Groceries")]
+    [InlineData(700_103, "de", "en", "Groceries")]
+    public async Task NewUser_GetsTheLanguageOfTheirTelegramApp(long telegramUserId, string languageCode, string expected, string category)
+    {
+        var client = ClientWithInitData(TelegramInitData.Create(
+            CustomWebApplicationFactory.BotToken, telegramUserId, languageCode: languageCode));
+
+        var profile = await client.GetFromJsonAsync<UserProfileResponse>("/api/v1/profile");
+        var categories = await client.GetFromJsonAsync<List<CategoryResponse>>("/api/v1/categories");
+
+        profile!.Language.Should().Be(expected);
+        categories!.Select(c => c.Name).Should().Contain(category);
     }
 
     [Fact]

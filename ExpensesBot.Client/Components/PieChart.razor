@@ -1,7 +1,7 @@
 @if (paths.Count > 0)
 {
     <div class="pie-chart">
-        <svg viewBox="0 0 200 200" class="pie-chart__svg" role="img" aria-label="Диаграмма расходов по категориям">
+        <svg viewBox="0 0 200 200" class="pie-chart__svg" role="img" aria-label="@T.SpendingChart">
             @foreach (var (path, color) in paths)
             {
                 <path d="@path" fill="@color" />
@@ -22,6 +22,7 @@
 }
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter] public List<Slice> Slices { get; set; } = [];
 
     private List<(string Path, string Color)> paths = [];

@@ -397,6 +397,11 @@ namespace ExpensesBot.Data.Migrations
                     b.Property<string>("DisplayName")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("TelegramUserId")
                         .HasColumnType("INTEGER");
 

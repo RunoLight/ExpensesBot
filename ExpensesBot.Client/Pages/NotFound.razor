@@ -1,11 +1,15 @@
 @page "/not-found"
 
-<PageTitle>Не найдено</PageTitle>
+<PageTitle>@T.NotFoundPageTitle</PageTitle>
 
 <div class="expenses-app">
     <div class="app-shell">
-        <EmptyState Icon="🧭" Title="Страница не найдена">
-            <p><a href="">Вернуться на главную</a></p>
+        <EmptyState Icon="🧭" Title="@T.NotFoundTitle">
+            <p><a href="">@T.BackHome</a></p>
         </EmptyState>
     </div>
 </div>
+
+@code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
+}

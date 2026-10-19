@@ -69,6 +69,7 @@ public sealed class SummaryService(ExpensesDbContext db, ExchangeRateProvider ex
             .ToListAsync(ct);
 
         var rates = await exchangeRates.GetAsync(ct);
+        var text = await db.TextForAsync(userId, ct);
         long ToTarget(Row row) => rates.Convert(row.AmountMinor, row.Currency, target) ?? 0;
 
         var expenses = rows.Where(x => x.Type == EntityTransactionType.Expense).ToList();
@@ -78,7 +79,7 @@ public sealed class SummaryService(ExpensesDbContext db, ExchangeRateProvider ex
         var byCategory = expenses
             .GroupBy(x => new { x.CategoryId, x.CategoryName })
             .Select(g => new CategoryBreakdown(
-                g.Key.CategoryName ?? TransactionService.NoCategoryName,
+                g.Key.CategoryName ?? text.NoCategory,
                 g.Key.CategoryId ?? 0,
                 target,
                 g.Sum(ToTarget),

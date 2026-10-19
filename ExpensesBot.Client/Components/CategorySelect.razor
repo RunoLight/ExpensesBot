@@ -1,5 +1,5 @@
 <select id="@Id" class="@CssClass" value="@(Value?.ToString() ?? "")" @onchange="OnChangedAsync">
-    <option value="">@EmptyLabel</option>
+    <option value="">@(EmptyLabel ?? T.NoCategory)</option>
     @foreach (var category in Options)
     {
         <option value="@category.Id">@(category.Icon ?? "📁") @category.Name</option>
@@ -7,10 +7,11 @@
 </select>
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter] public long? Value { get; set; }
     [Parameter] public EventCallback<long?> ValueChanged { get; set; }
     [Parameter] public List<CategoryDto> Categories { get; set; } = [];
-    [Parameter] public string EmptyLabel { get; set; } = "Без категории";
+    [Parameter] public string? EmptyLabel { get; set; }
     [Parameter] public string? Id { get; set; }
     [Parameter] public string CssClass { get; set; } = "form-control";
 

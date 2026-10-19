@@ -1,0 +1,80 @@
+@* Help text in English; HelpContentRu.razor is the Russian version. *@
+<div class="help">
+    <details open>
+        <summary>🔔 Bot notifications</summary>
+        <p>The bot messages you in Telegram on its own, even when the app is closed. To let it write to you, open the chat with the bot once and press “Start” (/start).</p>
+        <ul>
+            <li><strong>Evening reminder</strong> — once a day: how much you've spent today. Sent if you recorded something during the last 7 days.</li>
+            <li><strong>Weekly report</strong> — on Sunday evenings: the week's spending and the top 5 categories.</li>
+            <li><strong>Budget almost used up</strong> — when 90% of the limit is spent. Sent once per budget.</li>
+            <li><strong>Shared wallet entry</strong> — when another member records a transaction in the app.</li>
+        </ul>
+        <p class="muted">The reminder and the report count only expenses in the main currency; budgets count expenses in the budget's currency.</p>
+    </details>
+
+    <details>
+        <summary>💬 Recording through the bot</summary>
+        <p>Send the bot an amount and, optionally, a description. The bot asks whether it's an expense or income, picks a category and records the transaction. The description becomes the note.</p>
+        <ul>
+            <li><code>1500 coffee</code> or <code>coffee 1500</code> — the amount first or last</li>
+            <li><code>+50000 salary</code> — plus means income, minus means expense (then the bot doesn't ask)</li>
+            <li><code>20$ taxi</code>, <code>700 rub metro</code>, <code>2000 dram</code> — another currency; without one, the main currency</li>
+            <li><code>1.5k groceries</code>, <code>2k rent</code> — thousands</li>
+        </ul>
+        <p>After you choose expense or income, the bot shows category buttons. The first one, with ⭐, is its guess (from earlier transactions with the same description, a category named in the text, or keywords: “taxi” → Transport); then come the ones you pick most often. You can also record it without a category.</p>
+        <p>Under a recorded transaction there's a ↩️ “Undo” button: it deletes exactly that entry.</p>
+        <ul>
+            <li><code>/undo</code> — delete the latest entry (the bot shows it and asks first)</li>
+            <li><code>/menu</code> — menu with quick actions</li>
+            <li><code>/report</code> — spending summary for 7 days</li>
+            <li><code>/expenses</code> — open this app</li>
+            <li><code>/language</code> — switch the bot and the app between English and Russian</li>
+        </ul>
+    </details>
+
+    <details>
+        <summary>🌐 Language</summary>
+        <p>The app and the bot speak English or Russian. A new account starts in the language of your Telegram app (English when it's neither). The <strong>RU / EN</strong> button in the header, or <code>/language</code> in the bot, switches both: the choice is saved in your profile, so notifications use it too.</p>
+    </details>
+
+    <details>
+        <summary>💱 Main currency and rates</summary>
+        <p>The currency in the header is the main one. Totals and charts are shown in it, and the bot records amounts and computes notifications in it. The choice is saved in your profile.</p>
+        <p>Transactions keep their own currency. For totals they're converted at the Central Bank of Russia rate, which the server updates once a day; in the history an approximate conversion is shown next to the amount with <code>~</code>. If there are no fresh rates, a warning appears under the totals and the result is approximate.</p>
+    </details>
+
+    <details>
+        <summary>🔁 Recurring transactions</summary>
+        <p>Rent, subscriptions, salary. The server checks the rules every few minutes and adds the transaction to the history when it's due: the next day, a week, a month or a year after the previous one. Such transactions are marked “(auto)”.</p>
+        <p>The ▶ button records the transaction right away, and the next automatic payment is counted from today.</p>
+    </details>
+
+    <details>
+        <summary>💰 Budgets and 🎯 goals</summary>
+        <p><strong>A budget</strong> is a spending limit for a period, for one category or for all of them. Only expenses in the budget's currency count. The bar is green up to 70%, yellow up to 90%, red after that. The ✏️ button on the card changes the limit, category or period; after such an edit the 90% notification is sent again.</p>
+        <p><strong>A goal</strong> is saving up for a purchase. Progress is the sum of income in the goal's category and currency. “Add” records such income; you can also simply add income to that category. If you don't choose a category when creating a goal, the goal gets its own. The ✏️ button renames the goal or changes its amount or date; the currency and category stay the same.</p>
+    </details>
+
+    <details>
+        <summary>👥 Shared wallets</summary>
+        <p>A shared wallet is for a family, a couple or flatmates. Create one in the “Shared wallets” panel and send the members the invite code or link: with the link, the bot adds the person by itself. To join with a code, use the 🔑 button.</p>
+        <p>To record a transaction into a wallet, pick it in the add form (“Record into”). Every member sees such transactions, and the wallet card shows who spent how much this month and on what. The transaction stays yours: it counts in your personal statistics, and only you can change or delete it.</p>
+        <p>The owner can change the code (old links stop working), remove a member or delete the wallet. A member can leave. Either way the transactions aren't lost: they become personal for their authors.</p>
+    </details>
+
+    <details>
+        <summary>🗂️ Categories and tags</summary>
+        <p>The 📋 button in the “Categories” panel turns on management. An archived category disappears from forms but stays in the history and statistics. When a category is deleted, its transactions are kept without a category.</p>
+        <p>Tags are extra labels (for example, “vacation”). Tap a tag in the form to mark it before adding a transaction. Tap the circle to change a new tag's colour; ✎ on a tag opens it for renaming and recolouring. Above the history you can select tags to show only transactions with them (with any of the selected ones).</p>
+    </details>
+
+    <details>
+        <summary>📤 Export and 📥 import</summary>
+        <p>“Export CSV” above the history downloads all transactions. A file in the same format can be uploaded back with the 📥 button in the header, for example to move your data. Categories are matched by name.</p>
+    </details>
+
+    <details>
+        <summary>🗑️ Deleting the account</summary>
+        <p>The 🗑️ button in the header deletes all your transactions, categories, budgets, goals and tags from the server, as well as the shared wallets you own (other members keep their transactions). This cannot be undone. The next time you open the app, a new empty account with the basic categories is created.</p>
+    </details>
+</div>

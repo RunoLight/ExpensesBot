@@ -4,15 +4,15 @@
         <input class="form-control"
                value="@SearchText"
                @oninput="e => OnSearchChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty)"
-               placeholder="Поиск по заметке или категории..." />
+               placeholder="@T.SearchPlaceholder" />
     </div>
     <CategorySelect Categories="Categories"
                     IncludeArchived="true"
-                    EmptyLabel="Все категории"
+                    EmptyLabel="@T.AllCategories"
                     Value="CategoryId"
                     ValueChanged="OnCategoryChanged" />
     <select class="form-control" value="@SortOrder" @onchange="e => OnSortChanged.InvokeAsync(e.Value?.ToString() ?? DefaultSort)">
-        @foreach (var (value, label) in SortOptions)
+        @foreach (var (value, label) in SortOptions())
         {
             <option value="@value">@label</option>
         }
@@ -20,7 +20,7 @@
     @if (Tags.Count > 0)
     {
         <div class="filter-bar__tags">
-            <span class="field-label">Теги:</span>
+            <span class="field-label">@T.TagsLabel</span>
             @foreach (var tag in Tags)
             {
                 <TagChip @key="tag.Id"
@@ -30,24 +30,26 @@
             }
             @if (SelectedTagIds.Count > 0)
             {
-                <button type="button" class="btn-icon-textless btn-icon-textless--secondary" title="Сбросить теги" @onclick="OnTagsCleared">Сбросить</button>
+                <button type="button" class="btn-icon-textless btn-icon-textless--secondary" title="@T.ClearTags" @onclick="OnTagsCleared">@T.Clear</button>
             }
         </div>
     }
-    <button type="button" class="btn btn--secondary" disabled="@Disabled" @onclick="OnExport">📤 Экспорт CSV</button>
+    <button type="button" class="btn btn--secondary" disabled="@Disabled" @onclick="OnExport">@T.ExportCsv</button>
 </section>
 
 @code {
     public const string DefaultSort = "date-desc";
 
-    private static readonly (string Value, string Label)[] SortOptions =
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
+
+    private (string Value, string Label)[] SortOptions() =>
     [
-        (DefaultSort, "Сначала новые"),
-        ("date-asc", "Сначала старые"),
-        ("amount-desc", "По сумме ↓"),
-        ("amount-asc", "По сумме ↑"),
-        ("name-asc", "По категории А-Я"),
-        ("name-desc", "По категории Я-А")
+        (DefaultSort, T.NewestFirst),
+        ("date-asc", T.OldestFirst),
+        ("amount-desc", T.AmountDesc),
+        ("amount-asc", T.AmountAsc),
+        ("name-asc", T.CategoryAz),
+        ("name-desc", T.CategoryZa)
     ];
 
     [Parameter] public string SearchText { get; set; } = "";

@@ -10,7 +10,7 @@
         {
             <button type="button"
                     class="btn-icon-textless btn-icon-textless--sm"
-                    title="Изменить тег"
+                    title="@T.EditTag"
                     @onclick="OnEdit"
                     @onclick:stopPropagation>✎</button>
         }
@@ -18,7 +18,7 @@
         {
             <button type="button"
                     class="btn-icon-textless btn-icon-textless--sm"
-                    title="Удалить тег"
+                    title="@T.DeleteTag"
                     @onclick="ConfirmAndDeleteAsync"
                     @onclick:stopPropagation>✕</button>
         }
@@ -30,6 +30,7 @@ else
 }
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter, EditorRequired] public TagDto Tag { get; set; } = default!;
     [Parameter] public bool Selected { get; set; }
 
@@ -42,7 +43,7 @@ else
 
     private async Task ConfirmAndDeleteAsync()
     {
-        if (await JS.ConfirmAsync($"Удалить тег «{Tag.Name}»? Это действие нельзя отменить."))
+        if (await JS.ConfirmAsync(T.ConfirmDeleteTag(Tag.Name)))
             await OnDelete.InvokeAsync();
     }
 }

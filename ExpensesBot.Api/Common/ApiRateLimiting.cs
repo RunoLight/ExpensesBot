@@ -74,7 +74,7 @@ public static class ApiRateLimiting
                         {
                             Status = StatusCodes.Status429TooManyRequests,
                             Title = "Too many requests",
-                            Detail = "Слишком много запросов. Подождите немного и попробуйте снова."
+                            Detail = "Too many requests. Wait a little and try again."
                         }
                     });
             };

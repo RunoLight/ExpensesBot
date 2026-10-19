@@ -15,11 +15,11 @@ public sealed record UndoCandidate(
     string? Note,
     DateTime OccurredAtUtc)
 {
-    public string Describe() =>
-        $"{(Type == TransactionType.Income ? "➕" : "➖")} {NotificationTexts.FormatMoney(AmountMinor, Currency)}" +
+    public string Describe(BotText text) =>
+        $"{(Type == TransactionType.Income ? "➕" : "➖")} {text.Money(AmountMinor, Currency)}" +
         (CategoryName is not null ? $" · {CategoryName}" : "") +
         (Note is not null ? $" · {Note}" : "") +
-        $" · {OccurredAtUtc.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture)}";
+        $" · {text.Date(OccurredAtUtc)}";
 }
 
 /// <summary>

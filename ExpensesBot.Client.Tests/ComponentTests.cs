@@ -1,5 +1,6 @@
 using Bunit;
 using ExpensesBot.Client.Components;
+using ExpensesBot.Client.Localization;
 using ExpensesBot.Client.Models;
 using FluentAssertions;
 
@@ -41,6 +42,19 @@ public class SummaryCardTests : BunitContext
             .Add(x => x.SummaryMode, "month")
             .Add(x => x.Today, new DateTime(2026, 10, 16)));
 
+        cut.Find(".summary-card__range").TextContent.Should().Contain("1 Oct – 16 Oct 2026").And.Contain("5 transactions");
+        cut.Find(".summary-card__stats").TextContent.Should().Contain("Projected spending this month");
+    }
+
+    [Fact]
+    public void InRussian_UsesRussianDatesAndPlurals()
+    {
+        var cut = Render<SummaryCard>(p => p
+            .AddCascadingValue(UiText.Ru)
+            .Add(x => x.Summary, Summary())
+            .Add(x => x.SummaryMode, "month")
+            .Add(x => x.Today, new DateTime(2026, 10, 16)));
+
         cut.Find(".summary-card__range").TextContent.Should().Contain("1 окт – 16 окт 2026").And.Contain("5 операций");
         cut.Find(".summary-card__stats").TextContent.Should().Contain("Прогноз расходов на месяц");
     }
@@ -52,7 +66,7 @@ public class SummaryCardTests : BunitContext
             .Add(x => x.Summary, Summary())
             .Add(x => x.SummaryMode, "30days"));
 
-        cut.Find(".summary-card__periods button.active").TextContent.Should().Contain("30 дней");
+        cut.Find(".summary-card__periods button.active").TextContent.Should().Contain("30 days");
     }
 
     [Fact]
@@ -106,7 +120,7 @@ public class TransactionListTests : BunitContext
         var cut = Render<TransactionList>(p => p
             .Add(x => x.Transactions, new List<TransactionDto>()));
 
-        cut.Markup.Should().Contain("Пока пусто");
+        cut.Markup.Should().Contain("Nothing here yet");
     }
 
     [Fact]
@@ -166,7 +180,7 @@ public class TransactionListTests : BunitContext
         cut.FindAll(".filter-bar__tags .tag-chip")[1].Click();
         cut.FindAll(".transaction-row").Should().HaveCount(2);
 
-        cut.Find(".filter-bar__tags button[title='Сбросить теги']").Click();
+        cut.Find(".filter-bar__tags button[title='Clear tags']").Click();
         cut.FindAll(".transaction-row").Should().HaveCount(3);
     }
 
@@ -183,7 +197,7 @@ public class TransactionListTests : BunitContext
 
         cut.Find(".filter-bar input").Input("no such note");
 
-        cut.Markup.Should().Contain("Ничего не найдено");
+        cut.Markup.Should().Contain("Nothing found");
     }
 
     [Fact]
@@ -298,7 +312,7 @@ public class DeleteAccountModalTests : BunitContext
         var deleteButton = () => cut.Find(".btn--danger");
         deleteButton().HasAttribute("disabled").Should().BeTrue();
 
-        cut.Find("#delete-confirm-input").Input("УДАЛИТЬ");
+        cut.Find("#delete-confirm-input").Input("DELETE");
         deleteButton().HasAttribute("disabled").Should().BeFalse();
 
         deleteButton().Click();
@@ -346,10 +360,10 @@ public class BudgetsTests : BunitContext
             .Add(x => x.OnCreate, _ => { created = true; return Task.FromResult(true); })
             .Add(x => x.OnUpdate, (id, form) => { updated = (id, form); return Task.FromResult(true); }));
 
-        cut.Find("button[title='Изменить']").Click();
+        cut.Find("button[title='Edit']").Click();
 
         cut.Find("#budget-amount").GetAttribute("value").Should().Be("500");
-        cut.Find("button[type='submit']").TextContent.Should().Contain("Сохранить");
+        cut.Find("button[type='submit']").TextContent.Should().Contain("Save");
 
         cut.Find("#budget-amount").Change("750");
         cut.Find("form").Submit();
@@ -375,7 +389,7 @@ public class TagSelectorTests : BunitContext
             .Add(x => x.Tags, new List<TagDto> { tag })
             .Add(x => x.OnUpdateTag, e => { edit = e; return Task.FromResult(true); }));
 
-        cut.Find("button[title='Изменить тег']").Click();
+        cut.Find("button[title='Edit tag']").Click();
         cut.Find("#tag-name").Change("Отпуск 2026");
         cut.Find(".color-swatch").Click();
         cut.Find(".tag-selector__form .btn--primary").Click();
@@ -396,9 +410,17 @@ public class WalletsTests : BunitContext
     [InlineData(5, "5 участников")]
     [InlineData(11, "11 участников")]
     [InlineData(21, "21 участник")]
-    public void MembersLabel_UsesRussianPlurals(int count, string expected)
+    public void Members_UsesRussianPlurals(int count, string expected)
     {
-        Wallets.MembersLabel(count).Should().Be(expected);
+        UiText.Ru.Members(count).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(1, "1 member")]
+    [InlineData(2, "2 members")]
+    public void Members_UsesEnglishPlurals(int count, string expected)
+    {
+        UiText.En.Members(count).Should().Be(expected);
     }
 
     [Fact]
@@ -422,10 +444,10 @@ public class WalletsTests : BunitContext
 
         cut.Find(".list-row button").Click();
 
-        cut.Markup.Should().Contain("Борис").And.Contain("Анна (вы)");
+        cut.Markup.Should().Contain("Борис").And.Contain("Анна (you)");
         cut.Find(".wallet-code").TextContent.Should().Be("ABCD2345");
         cut.Markup.Should().Contain("https://t.me/my_expenses_bot?start=join_ABCD2345");
-        cut.FindAll("button[title='Исключить']").Should().ContainSingle("the owner can remove others but not themselves");
+        cut.FindAll("button[title='Remove']").Should().ContainSingle("the owner can remove others but not themselves");
     }
 
     [Fact]
@@ -443,7 +465,7 @@ public class WalletsTests : BunitContext
 
         cut.Find(".list-row button").Click();
 
-        cut.Markup.Should().Contain("Выйти из кошелька").And.NotContain("Удалить кошелёк");
+        cut.Markup.Should().Contain("Leave wallet").And.NotContain("Delete wallet");
         cut.FindAll(".wallet-code").Should().BeEmpty();
     }
 }
@@ -456,9 +478,62 @@ public class HelpModalTests : BunitContext
         var closed = false;
         var cut = Render<HelpModal>(p => p.Add(x => x.OnClose, () => closed = true));
 
-        cut.Markup.Should().Contain("Уведомления от бота");
+        cut.Markup.Should().Contain("Bot notifications");
         cut.Find(".modal-card__actions button").Click();
 
         closed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void InRussian_ShowsTheRussianGuide()
+    {
+        var cut = Render<HelpModal>(p => p.AddCascadingValue(UiText.Ru));
+
+        cut.Markup.Should().Contain("Уведомления от бота").And.Contain("/language");
+        cut.Find(".modal-card__actions button").TextContent.Should().Be("Понятно");
+    }
+}
+
+public class LanguageTests : BunitContext
+{
+    [Theory]
+    [InlineData("ru", "ru")]
+    [InlineData("ru-RU", "ru")]
+    [InlineData("en-GB", "en")]
+    [InlineData("uk", "en")]
+    [InlineData(null, "en")]
+    public void TelegramLanguage_MapsToASupportedOne(string? code, string expected)
+    {
+        UiText.LanguageFromTelegram(code).Should().Be(expected);
+    }
+
+    [Fact]
+    public void LanguageState_StartsInEnglish_AndNotifiesOnChange()
+    {
+        var state = new LanguageState();
+        var changes = 0;
+        state.Changed += () => changes++;
+
+        state.Text.Should().BeSameAs(UiText.En);
+        state.Set("ru");
+        state.Set("ru");
+
+        state.Text.Should().BeSameAs(UiText.Ru);
+        changes.Should().Be(1, "setting the current language again is not a change");
+    }
+
+    [Fact]
+    public void Header_SwitchButton_OffersTheOtherLanguage()
+    {
+        var toggled = false;
+        var cut = Render<AppHeader>(p => p
+            .AddCascadingValue(UiText.Ru)
+            .Add(x => x.OnToggleLanguage, () => toggled = true));
+
+        var button = cut.Find("button[title='English']");
+        button.TextContent.Should().Be("EN");
+        button.Click();
+
+        toggled.Should().BeTrue();
     }
 }

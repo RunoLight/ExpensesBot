@@ -173,6 +173,10 @@ public sealed class ExpensesApiClient(HttpClient http)
     public Task SetDefaultCurrencyAsync(string currency, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Put, "api/v1/profile/currency", new { Currency = currency }, ct);
 
+    /// <param name="language">"en" or "ru".</param>
+    public Task SetLanguageAsync(string language, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Put, "api/v1/profile/language", new { Language = language }, ct);
+
     public Task DeleteAccountAsync(CancellationToken ct = default) =>
         SendAsync(HttpMethod.Delete, "api/v1/profile", null, ct);
 

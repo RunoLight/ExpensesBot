@@ -51,6 +51,10 @@ public sealed class ExpensesDbContext(
             .Property(x => x.DefaultCurrency)
             .HasMaxLength(3);
 
+        modelBuilder.Entity<User>()
+            .Property(x => x.Language)
+            .HasMaxLength(2);
+
         modelBuilder.Entity<Category>()
             .Property(x => x.Name)
             .HasMaxLength(80);

@@ -53,7 +53,7 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
 
         // Goals created before goals had their own category are matched by the
         // note the contribute endpoint writes.
-        var legacyNotes = goals.Where(g => g.CategoryId is null).Select(g => ContributionNote(g.Name)).ToList();
+        var legacyNotes = goals.Where(g => g.CategoryId is null).Select(g => LegacyContributionNote(g.Name)).ToList();
         var savedByNote = await db.Transactions
             .Where(t => t.UserId == userId &&
                         t.Type == TransactionType.Income &&
@@ -68,7 +68,7 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
             {
                 var saved = g.CategoryId.HasValue
                     ? savedByCategory.Where(x => x.CategoryId == g.CategoryId && x.Currency == g.Currency).Sum(x => x.Total)
-                    : savedByNote.Where(x => x.Note == ContributionNote(g.Name) && x.Currency == g.Currency).Sum(x => x.Total);
+                    : savedByNote.Where(x => x.Note == LegacyContributionNote(g.Name) && x.Currency == g.Currency).Sum(x => x.Total);
 
                 return new GoalResponse(
                     g.Id,
@@ -154,8 +154,8 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
         {
             // Goals from before goal categories find their contributions by note,
             // so the notes have to follow the new name.
-            var oldNote = ContributionNote(goal.Name);
-            var newNote = ContributionNote(name);
+            var oldNote = LegacyContributionNote(goal.Name);
+            var newNote = LegacyContributionNote(name);
 
             await db.Transactions
                 .Where(t => t.UserId == userId && t.Type == TransactionType.Income && t.Note == oldNote)
@@ -203,6 +203,12 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
             return amountError;
 
         var now = clock.GetUtcNow().UtcDateTime;
+
+        // A legacy goal finds its contributions by this exact note; others get it in the user's language.
+        var note = goal.CategoryId is null
+            ? LegacyContributionNote(goal.Name)
+            : (await db.TextForAsync(userId, ct)).GoalContributionNote(goal.Name);
+
         var transaction = new Transaction
         {
             UserId = userId,
@@ -210,7 +216,7 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
             AmountMinor = request.AmountMinor,
             Currency = goal.Currency,
             Type = TransactionType.Income,
-            Note = ContributionNote(goal.Name),
+            Note = note,
             OccurredAtUtc = now,
             CreatedAtUtc = now
         };
@@ -221,5 +227,9 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
         return new ContributionResponse(transaction.Id, request.AmountMinor);
     }
 
-    private static string ContributionNote(string goalName) => $"Вклад в цель: {goalName}";
+    /// <summary>
+    /// The note that links contributions to goals created before goals had a category.
+    /// It is stored data, so it keeps its original (Russian) wording in every language.
+    /// </summary>
+    private static string LegacyContributionNote(string goalName) => $"Вклад в цель: {goalName}";
 }

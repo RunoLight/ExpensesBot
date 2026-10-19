@@ -1,3 +1,4 @@
+using ExpensesBot.Data;
 using ExpensesBot.Data.Entities;
 using FluentAssertions;
 using Newtonsoft.Json.Linq;
@@ -35,13 +36,13 @@ public class RecurrenceScheduleTests
     }
 
     [Fact]
-    public void AutoNote_DependsOnTransactionType()
+    public void AutoNote_DependsOnTransactionTypeAndLanguage()
     {
-        RecurrenceSchedule.AutoNote(new RecurringTransaction { Type = TransactionType.Income })
-            .Should().Be("Авто-доход");
+        MessageText.En.AutoNote(null, TransactionType.Income).Should().Be("Auto income");
+        MessageText.En.AutoNote("Rent", TransactionType.Expense).Should().Be("Rent (auto)");
 
-        RecurrenceSchedule.AutoNote(new RecurringTransaction { Type = TransactionType.Expense, Note = "Аренда" })
-            .Should().Be("Аренда (авто)");
+        MessageText.Ru.AutoNote(null, TransactionType.Income).Should().Be("Авто-доход");
+        MessageText.Ru.AutoNote("Аренда", TransactionType.Expense).Should().Be("Аренда (авто)");
     }
 }
 

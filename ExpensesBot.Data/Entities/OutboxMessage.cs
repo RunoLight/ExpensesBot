@@ -13,6 +13,15 @@ public enum OutboxStatus
 /// exists if and only if that change was committed; the Worker's
 /// <c>OutboxDispatcher</c> delivers it and retries transient failures.
 /// </summary>
+/// <summary>Values of <see cref="OutboxMessage.Kind"/>.</summary>
+public static class OutboxKind
+{
+    public const string DailyReminder = "daily-reminder";
+    public const string WeeklyReport = "weekly-report";
+    public const string BudgetAlert = "budget-alert";
+    public const string WalletTransaction = "wallet-transaction";
+}
+
 public sealed class OutboxMessage
 {
     public const int MaxTextLength = 4096;

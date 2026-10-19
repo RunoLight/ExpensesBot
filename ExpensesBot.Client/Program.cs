@@ -1,4 +1,5 @@
 using ExpensesBot.Client;
+using ExpensesBot.Client.Localization;
 using ExpensesBot.Client.Services;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
@@ -12,6 +13,7 @@ var apiBaseUrl = builder.Configuration["ApiBaseUrl"] is { Length: > 0 } configur
     : "http://localhost:5069/";
 
 builder.Services.AddScoped<TelegramService>();
+builder.Services.AddScoped<LanguageState>();
 builder.Services.AddTransient<TelegramAuthHandler>();
 
 builder.Services

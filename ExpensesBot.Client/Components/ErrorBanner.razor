@@ -1,9 +1,10 @@
 <div class="error-message" role="alert">
     <span>@Message</span>
-    <button type="button" class="btn-icon-textless" title="Закрыть" @onclick="OnDismiss">✕</button>
+    <button type="button" class="btn-icon-textless" title="@T.Close" @onclick="OnDismiss">✕</button>
 </div>
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter] public string Message { get; set; } = "";
     [Parameter] public EventCallback OnDismiss { get; set; }
 }

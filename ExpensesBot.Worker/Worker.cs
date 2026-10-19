@@ -18,7 +18,6 @@ public class Worker(
     private static readonly TimeSpan MaintenanceInterval = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
     private const int LongPollTimeoutSeconds = 25;
-    private const string NoCategoryName = "Без категории";
 
     private long _lastUpdateId;
     private DateTime _lastMaintenanceUtc = DateTime.MinValue;
@@ -135,6 +134,7 @@ public class Worker(
         var now = DateTime.UtcNow;
 
         var recurring = await db.RecurringTransactions
+            .Include(x => x.User)
             .Where(x => x.IsActive && x.LastExecutedAtUtc < now)
             .ToListAsync(ct);
 
@@ -158,7 +158,7 @@ public class Worker(
                 AmountMinor = rt.AmountMinor,
                 Currency = rt.Currency,
                 Type = rt.Type,
-                Note = RecurrenceSchedule.AutoNote(rt),
+                Note = MessageText.For(rt.User.Language).AutoNote(rt.Note, rt.Type),
                 OccurredAtUtc = now,
                 CreatedAtUtc = now
             });
@@ -212,10 +212,11 @@ public class Worker(
                     continue;
 
                 var spentMinor = await SumExpensesAsync(db, user, today, tomorrow, ct);
-                var text = NotificationTexts.DailyReminder(user.DisplayName ?? "друг", spentMinor, user.DefaultCurrency);
+                var texts = MessageText.For(user.Language);
+                var text = texts.DailyReminder(user.DisplayName ?? texts.FallbackName, spentMinor, user.DefaultCurrency);
 
                 await ledger.EnqueueOnceAsync(user.Id, NotificationKind.DailyReminder, todayKey,
-                    OutboxMessage.Create(user.Id, NotificationTexts.DailyReminderKind, text, now), ct);
+                    OutboxMessage.Create(user.Id, OutboxKind.DailyReminder, text, now), ct);
             }
 
             if (isReportDay)
@@ -237,20 +238,21 @@ public class Worker(
                                     t.Currency == user.DefaultCurrency &&
                                     t.OccurredAtUtc >= weekStart &&
                                     t.OccurredAtUtc < tomorrow)
-                        .GroupBy(t => t.Category != null ? t.Category.Name : NoCategoryName)
+                        .GroupBy(t => t.Category != null ? t.Category.Name : null)
                         .Select(g => new { Name = g.Key, Total = g.Sum(t => t.AmountMinor) })
                         .OrderByDescending(x => x.Total)
                         .Take(5)
                         .ToListAsync(ct);
 
-                    var text = NotificationTexts.WeeklyReport(
-                        user.DisplayName ?? "друг",
+                    var texts = MessageText.For(user.Language);
+                    var text = texts.WeeklyReport(
+                        user.DisplayName ?? texts.FallbackName,
                         spentMinor,
                         user.DefaultCurrency,
-                        topCategories.Select(x => (x.Name, x.Total)).ToList());
+                        topCategories.Select(x => (x.Name ?? texts.NoCategory, x.Total)).ToList());
 
                     await ledger.EnqueueOnceAsync(user.Id, NotificationKind.WeeklyReport, todayKey,
-                        OutboxMessage.Create(user.Id, NotificationTexts.WeeklyReportKind, text, now), ct);
+                        OutboxMessage.Create(user.Id, OutboxKind.WeeklyReport, text, now), ct);
                 }
             }
 
@@ -291,14 +293,15 @@ public class Worker(
             if (budget.AmountMinor <= 0 || spentMinor < budget.AmountMinor * 0.9m)
                 continue;
 
-            var text = NotificationTexts.BudgetAlert(
-                budget.Category?.Name ?? "Общий",
+            var texts = MessageText.For(budget.User.Language);
+            var text = texts.BudgetAlert(
+                budget.Category?.Name ?? texts.OverallBudget,
                 spentMinor,
                 budget.AmountMinor,
                 budget.Currency);
 
             await ledger.EnqueueOnceAsync(budget.UserId, NotificationKind.BudgetAlert, key,
-                OutboxMessage.Create(budget.UserId, NotificationTexts.BudgetAlertKind, text, now), ct);
+                OutboxMessage.Create(budget.UserId, OutboxKind.BudgetAlert, text, now), ct);
         }
     }
 

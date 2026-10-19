@@ -13,6 +13,10 @@ public sealed class TelegramService(IJSRuntime js)
     public ValueTask<bool> IsDarkThemeAsync() =>
         js.InvokeAsync<bool>("telegramApp.isDarkTheme");
 
+    /// <summary>The user's Telegram interface language ("en", "ru", …); null outside Telegram.</summary>
+    public ValueTask<string?> GetLanguageCodeAsync() =>
+        js.InvokeAsync<string?>("telegramApp.getLanguageCode");
+
     /// <summary>
     /// Returns the "startapp" deep-link parameter. With a key, "key_value"
     /// is reduced to "value" and parameters for other keys return null.

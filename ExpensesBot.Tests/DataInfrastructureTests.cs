@@ -38,7 +38,28 @@ public class UserFactoryTests
         user.TelegramUserId.Should().Be(42);
         user.DisplayName.Should().Be("Анна");
         user.DefaultCurrency.Should().Be(Currencies.Default);
+        user.Language.Should().Be(Languages.English);
+        user.Categories.Select(c => c.Name).Should().Contain(new[] { "Groceries", "Salary", "Other" });
+    }
+
+    [Fact]
+    public void Create_InRussian_NamesDefaultCategoriesInRussian()
+    {
+        var user = UserFactory.Create(42, "Анна", Languages.Russian);
+
+        user.Language.Should().Be(Languages.Russian);
         user.Categories.Select(c => c.Name).Should().Contain(new[] { "Продукты", "Зарплата", "Другое" });
+    }
+
+    [Theory]
+    [InlineData("ru", "ru")]
+    [InlineData("ru-RU", "ru")]
+    [InlineData("en", "en")]
+    [InlineData("de", "en")]
+    [InlineData(null, "en")]
+    public void Languages_FromTelegram_FallsBackToEnglish(string? code, string expected)
+    {
+        Languages.FromTelegram(code).Should().Be(expected);
     }
 
     [Fact]

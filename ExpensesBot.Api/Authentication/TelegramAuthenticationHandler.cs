@@ -44,7 +44,7 @@ public sealed class TelegramAuthenticationHandler(
             long.TryParse(devHeader.ToString(), out var devTelegramId) &&
             devTelegramId > 0)
         {
-            return await SignInAsync(devTelegramId, $"Dev user {devTelegramId}");
+            return await SignInAsync(devTelegramId, $"Dev user {devTelegramId}", languageCode: null);
         }
 
         var authorization = Request.Headers.Authorization.ToString();
@@ -63,12 +63,14 @@ public sealed class TelegramAuthenticationHandler(
         if (!validator.TryValidate(initData, botToken, out var telegramUserId))
             return AuthenticateResult.Fail("Invalid or expired Telegram init data.");
 
-        return await SignInAsync(telegramUserId, TelegramInitDataValidator.ReadDisplayName(initData));
+        return await SignInAsync(telegramUserId,
+            TelegramInitDataValidator.ReadDisplayName(initData),
+            TelegramInitDataValidator.ReadLanguageCode(initData));
     }
 
-    private async Task<AuthenticateResult> SignInAsync(long telegramUserId, string? displayName)
+    private async Task<AuthenticateResult> SignInAsync(long telegramUserId, string? displayName, string? languageCode)
     {
-        var user = await provisioning.FindOrCreateAsync(telegramUserId, displayName, Context.RequestAborted);
+        var user = await provisioning.FindOrCreateAsync(telegramUserId, displayName, languageCode, Context.RequestAborted);
 
         var claims = new[]
         {

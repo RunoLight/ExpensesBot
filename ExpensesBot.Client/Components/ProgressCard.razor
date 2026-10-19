@@ -4,11 +4,11 @@
         <span class="card__amount">@Amount</span>
         @if (OnEdit.HasDelegate)
         {
-            <button type="button" class="btn-icon-textless" title="Изменить" @onclick="OnEdit">✏️</button>
+            <button type="button" class="btn-icon-textless" title="@T.Edit" @onclick="OnEdit">✏️</button>
         }
         @if (OnDelete.HasDelegate)
         {
-            <button type="button" class="btn-icon-textless btn-icon-textless--danger" title="Удалить" @onclick="OnDelete">✕</button>
+            <button type="button" class="btn-icon-textless btn-icon-textless--danger" title="@T.Delete" @onclick="OnDelete">✕</button>
         }
     </div>
     <ProgressBar Value="@Percent" Color="@Color" />
@@ -20,6 +20,7 @@
 </article>
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter, EditorRequired] public string Title { get; set; } = "";
     [Parameter, EditorRequired] public string Amount { get; set; } = "";
     [Parameter] public double Percent { get; set; }

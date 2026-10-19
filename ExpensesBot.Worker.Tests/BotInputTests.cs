@@ -20,6 +20,13 @@ public class BotEntryParserTests
     [InlineData("1,5к продукты", 1500, null, null, "продукты")]
     [InlineData("3k", 3000, null, null, null)]
     [InlineData("2 тыс аренда", 2000, null, null, "аренда")]
+    [InlineData("1500 coffee", 1500, null, null, "coffee")]
+    [InlineData("+50000 salary", 50000, null, TransactionType.Income, "salary")]
+    [InlineData("20 dollars taxi", 20, "USD", null, "taxi")]
+    [InlineData("taxi 700 rub", 700, "RUB", null, "taxi")]
+    [InlineData("metro 300 roubles", 300, "RUB", null, "metro")]
+    [InlineData("2000 dram bread", 2000, "AMD", null, "bread")]
+    [InlineData("1.5k groceries", 1500, null, null, "groceries")]
     public void Parses_AmountCurrencyTypeAndNote(string text, double amount, string? currency, TransactionType? type, string? note)
     {
         BotEntryParser.TryParse(text, out var entry).Should().BeTrue();
@@ -114,6 +121,24 @@ public class CategoryGuesserTests
     public void NamesAndKeywords_PickACategory(string note, string expected)
     {
         CategoryGuesser.Guess(note, Categories, [])!.Name.Should().Be(expected);
+    }
+
+    // The English default categories (see MessageText.DefaultCategories).
+    private static readonly List<CategoryOption> EnglishCategories =
+    [
+        new(11, "Groceries", "🛒"), new(12, "Transport", "🚕"), new(13, "Home", "🏠"),
+        new(14, "Cafe", "☕"), new(15, "Salary", "💼"), new(16, "Other", "📦")
+    ];
+
+    [Theory]
+    [InlineData("taxi to the airport", "Transport")]
+    [InlineData("coffee", "Cafe")]
+    [InlineData("groceries for the week", "Groceries")]
+    [InlineData("rent", "Home")]
+    [InlineData("salary", "Salary")]
+    public void EnglishNotes_PickTheEnglishDefaults(string note, string expected)
+    {
+        CategoryGuesser.Guess(note, EnglishCategories, [])!.Name.Should().Be(expected);
     }
 
     [Fact]

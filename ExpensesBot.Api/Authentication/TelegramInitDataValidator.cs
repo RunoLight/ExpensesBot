@@ -141,6 +141,18 @@ public sealed class TelegramInitDataValidator
     /// </summary>
     public static string? ReadDisplayName(string initData)
     {
+        var parts = new[] { ReadUserField(initData, "first_name"), ReadUserField(initData, "last_name") }
+            .Where(value => !string.IsNullOrWhiteSpace(value));
+
+        var displayName = string.Join(" ", parts);
+        return string.IsNullOrWhiteSpace(displayName) ? null : displayName;
+    }
+
+    /// <summary>The user's Telegram interface language ("en", "ru", …), if present.</summary>
+    public static string? ReadLanguageCode(string initData) => ReadUserField(initData, "language_code");
+
+    private static string? ReadUserField(string initData, string field)
+    {
         var parameters = QueryHelpers.ParseQuery(initData);
 
         if (!parameters.TryGetValue("user", out var userValues) ||
@@ -153,14 +165,9 @@ public sealed class TelegramInitDataValidator
         try
         {
             using var document = JsonDocument.Parse(userValues[0]!);
-            var root = document.RootElement;
-
-            var parts = new[] { "first_name", "last_name" }
-                .Select(name => root.TryGetProperty(name, out var value) ? value.GetString() : null)
-                .Where(value => !string.IsNullOrWhiteSpace(value));
-
-            var displayName = string.Join(" ", parts);
-            return string.IsNullOrWhiteSpace(displayName) ? null : displayName;
+            return document.RootElement.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
         }
         catch (JsonException)
         {

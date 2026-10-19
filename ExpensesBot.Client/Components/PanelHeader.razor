@@ -4,7 +4,7 @@
         @ChildContent
         @if (OnToggleForm.HasDelegate)
         {
-            <button type="button" class="btn-icon" title="@(FormOpen ? "Закрыть" : AddTitle)" @onclick="OnToggleForm">
+            <button type="button" class="btn-icon" title="@(FormOpen ? T.Close : AddTitle ?? T.Add)" @onclick="OnToggleForm">
                 @(FormOpen ? "✕" : "+")
             </button>
         }
@@ -12,9 +12,10 @@
 </div>
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter, EditorRequired] public string Title { get; set; } = "";
     [Parameter] public bool FormOpen { get; set; }
-    [Parameter] public string AddTitle { get; set; } = "Добавить";
+    [Parameter] public string? AddTitle { get; set; }
     [Parameter] public EventCallback OnToggleForm { get; set; }
 
     /// <summary>Extra buttons placed before the add/close button.</summary>

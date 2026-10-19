@@ -1,7 +1,7 @@
 <div>
     <div class="tag-selector__header">
-        <span class="field-label">Теги</span>
-        <button type="button" class="btn-icon btn-icon--sm" title="@(showForm ? "Закрыть" : "Новый тег")" @onclick="ToggleForm">
+        <span class="field-label">@T.Tags</span>
+        <button type="button" class="btn-icon btn-icon--sm" title="@(showForm ? T.Close : T.NewTag)" @onclick="ToggleForm">
             @(showForm ? "✕" : "+")
         </button>
     </div>
@@ -11,14 +11,14 @@
         <div class="tag-selector__form">
             <div class="form-row form-row--inline">
                 <div class="form-group">
-                    <label for="tag-name">Название</label>
-                    <input id="tag-name" class="form-control" placeholder="Например, отпуск" @bind="newTag.Name" />
+                    <label for="tag-name">@T.Name</label>
+                    <input id="tag-name" class="form-control" placeholder="@T.TagPlaceholder" @bind="newTag.Name" />
                 </div>
-                <button type="button" class="color-swatch" title="Сменить цвет" @onclick="() => newTag.Color = TagColors.Next(newTag.Color)">
+                <button type="button" class="color-swatch" title="@T.ChangeColor" @onclick="() => newTag.Color = TagColors.Next(newTag.Color)">
                     <span style="background-color: @newTag.Color"></span>
                 </button>
             </div>
-            <button class="btn btn--primary" type="button" disabled="@Saving" @onclick="SubmitAsync">@(editingId is null ? "Добавить тег" : "Сохранить тег")</button>
+            <button class="btn btn--primary" type="button" disabled="@Saving" @onclick="SubmitAsync">@(editingId is null ? T.AddTag : T.SaveTag)</button>
         </div>
     }
 
@@ -39,6 +39,7 @@
 </div>
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter] public List<TagDto> Tags { get; set; } = [];
     [Parameter] public HashSet<long> SelectedTagIds { get; set; } = [];
     [Parameter] public bool Saving { get; set; }

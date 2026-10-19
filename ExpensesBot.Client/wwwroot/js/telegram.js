@@ -20,6 +20,10 @@ window.telegramApp = {
         return startParam;
     },
 
+    getLanguageCode: function () {
+        return window.Telegram?.WebApp?.initDataUnsafe?.user?.language_code ?? null;
+    },
+
     isDarkTheme: function () {
         return window.Telegram?.WebApp?.colorScheme === "dark";
     },

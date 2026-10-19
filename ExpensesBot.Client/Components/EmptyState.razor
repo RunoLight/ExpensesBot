@@ -1,11 +1,12 @@
 <div class="empty-state">
     <div class="empty-state__icon">@Icon</div>
-    <strong>@Title</strong>
+    <strong>@(Title ?? T.Empty)</strong>
     @ChildContent
 </div>
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter] public string Icon { get; set; } = "📋";
-    [Parameter] public string Title { get; set; } = "Пока пусто";
+    [Parameter] public string? Title { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 }

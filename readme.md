@@ -6,7 +6,7 @@ A personal finance tracker that lives inside Telegram: a chat bot for quick
 entries and a Blazor WebAssembly **Telegram Mini App** for everything else.
 Built with .NET 10, ASP.NET Core Minimal APIs and EF Core.
 
-> The user interface and bot messages are in Russian; the code and docs are in English.
+> The Mini App and the bot speak English (the default) and Russian; the code and docs are in English.
 
 ## What it does
 
@@ -19,6 +19,7 @@ Built with .NET 10, ASP.NET Core Minimal APIs and EF Core.
 - **Shared wallets** — a family budget: invite people by code or `t.me/<bot>?start=join_CODE`, record transactions into the wallet, see who spent what; the other members get a message about each entry.
 - **Tags**, **CSV export and import** (the export can be re-imported).
 - **Undo** — a ↩️ button under every entry recorded from the chat, and `/undo` for the latest one.
+- **English and Russian** — a new account starts in the language of the user's Telegram app; the RU / EN button in the Mini App or `/language` in the bot switches the app, the bot and notifications together.
 - **Notifications** — evening reminder, weekly report, budget alerts, shared-wallet entries; `/report` in chat.
 
 ## Frontend
@@ -29,7 +30,8 @@ The Blazor client is plain Razor components and two stylesheets: no CSS framewor
 |---|---|
 | `wwwroot/css/tokens.css` | Design tokens: colours, typography, radii, shadows. One `.expenses-app.dark` block overrides them for the dark theme. |
 | `wwwroot/css/app.css` | Base styles and component styles (BEM: `card`, `card__header`, `btn--primary`), plus Blazor's loading and error UI. |
-| `wwwroot/js/telegram.js` | Telegram Mini App bridge (`initData`, start parameter, theme, native confirm dialogs) and CSV file helpers. |
+| `wwwroot/js/telegram.js` | Telegram Mini App bridge (`initData`, start parameter, theme, language, native confirm dialogs) and CSV file helpers. |
+| `Localization/UiText.cs` | Every UI string in English and Russian; `LanguageState` holds the current one and `App.razor` cascades it to all components. |
 
 `Pages/Home.razor` composes the page and owns the data; each panel in `Components/` owns its own form and open/closed state and reports back through callbacks.
 
@@ -76,11 +78,12 @@ flowchart LR
 - **Money is stored as `long` minor units** (cents/luma) together with an ISO currency code. No floating-point rounding errors; conversions round once, explicitly.
 - **Authentication without passwords.** The Mini App sends Telegram's signed `initData`; the API checks the HMAC-SHA256 signature with the bot token ([Telegram docs](https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app)), rejects stale data, and creates the user on first visit. See `TelegramInitDataValidator`.
 - **Standard ASP.NET Core auth pipeline.** `TelegramAuthenticationHandler` turns a valid `initData` into a `ClaimsPrincipal` (creating the user on first visit); route groups use `.RequireAuthorization()` and endpoints just read `user.GetUserId()`.
+- **Typed, compile-checked localization.** There are no resource files: `UiText` (Mini App), `BotText` (bot chat) and `MessageText` (texts the API and the Worker share: notifications, default categories, CSV headers, automatic notes) expose one property per string, and each property passes both translations to `Pick(en, ru)`. A missing translation is a compile error, a translator sees both languages side by side, and the Mini App switches language instantly because the current `UiText` is a cascading value. The language lives in the user's profile (`Users.Language`), so scheduled notifications and wallet messages are written in each recipient's language. New accounts take it from Telegram's `language_code` (`ru*` → Russian, anything else → English); accounts created before localization were migrated to Russian, the only language the app had. The bot's parser and category guesser accept both languages regardless of the setting.
 - **Thin endpoints, testable services.** Business rules live in application services that return `Result<T>` instead of throwing; endpoints map results to HTTP, and errors are returned as RFC 9457 problem details. Services are unit-tested directly against SQLite, without HTTP.
 - **Development login is Development-only.** For local work the API also accepts `X-Dev-User-Id`, but only when `ASPNETCORE_ENVIRONMENT=Development`, and Release builds of the client never send it. A test starts the API as Production and checks that the header is ignored.
 - **Cross-currency totals are converted, never summed raw.** The summary endpoint converts every transaction into the requested display currency using the latest stored rates (with clearly flagged fallback rates if none are stored yet).
 - **The bot is stateless.** One handler serves every chat, so type, amount, currency and category travel inside the button's `callback_data` (`tx:e:1500:AMD:12`, at most 64 bytes). The note doesn't fit, so the bot's question is sent as a reply to the user's message and the handler re-parses the note from `reply_to_message`. The confirmation message is edited after recording, so a second tap can't create a duplicate.
-- **Free-form input is a pure function.** `BotEntryParser` (regex: amount first or last, sign, currency symbol or word, `к`/`тыс` multiplier) and `CategoryGuesser` (same note before → category name in the note → keywords) have no I/O and are covered by table-driven tests.
+- **Free-form input is a pure function.** `BotEntryParser` (regex: amount first or last, sign, currency symbol or English/Russian word, `k`/`к`/`тыс` multiplier) and `CategoryGuesser` (same note before → category name in the note → keywords) have no I/O and are covered by table-driven tests.
 - **Resource-level authorization for shared wallets.** Authentication says who the user is; `WalletService` decides per wallet: non-members get 404 (existence isn't revealed), members can read and record, only the owner may rename, re-key the invite, remove members or delete (403). A transaction keeps its author as owner, so personal statistics and edit rights don't change; leaving or deleting a wallet turns its transactions back into personal ones (`ON DELETE SET NULL`). Joining is shared by the API and the bot (`WalletInvites` in the Data project).
 - **Creating a transaction is idempotent.** `POST /api/v1/transactions` accepts an `Idempotency-Key` header. The key is stored on the transaction under a unique `(UserId, IdempotencyKey)` index: a repeated request returns the original transaction, a concurrent duplicate loses the race on the index and gets the same answer, and reusing a key for a different amount, currency, type, category or wallet is rejected with 422. The Mini App generates one key per form, so a double tap or a network retry can't record the same entry twice.
 - **Notifications go through a transactional outbox.** Nobody calls Telegram in the middle of business logic: the API and the Worker add an `OutboxMessages` row in the same `SaveChanges` as the change it is about (a wallet transaction, a reminder's `NotificationLogs` entry), so a message exists if and only if that change was committed. `OutboxDispatcher`, a separate hosted service in the Worker, delivers due messages, records each outcome right after sending, retries transient failures (network, 5xx, 429 with Telegram's `retry_after`) with exponential backoff up to 8 attempts, and drops permanent ones (bot blocked). A slow Telegram therefore never blocks the bot or an API request.
@@ -154,7 +157,7 @@ The API listens on `http://localhost:8080` and the Worker runs the bot; both use
 4. Deploy the client (the `Deploy` workflow publishes it to GitHub Pages) and register that URL with @BotFather (`/newapp` or the bot's menu button).
 5. Send `/start` to the bot.
 
-Bot commands: `/start`, `/menu`, `/expenses` (open the app), `/report` (last 7 days), `/undo` (delete the latest entry after a confirmation), or just send an amount with an optional note (`1500 кофе`, `+50000 зарплата`, `20$ такси`).
+Bot commands: `/start`, `/menu`, `/expenses` (open the app), `/report` (last 7 days), `/undo` (delete the latest entry after a confirmation), `/language` (switch between English and Russian; `/language ru` or `/language en` picks one), or just send an amount with an optional note (`1500 coffee`, `+50000 salary`, `20$ taxi`, `700 руб метро`).
 
 ## Tests
 
@@ -163,9 +166,9 @@ dotnet test ExpensesBot.slnx
 ```
 
 - **Application service tests** exercise summary math, budget and goal progress directly against a migrated in-memory SQLite database with a fixed clock.
-- **API integration tests** run the real application (`WebApplicationFactory`) against an in-memory SQLite database created from the migrations. They cover validation, health checks, rate limiting, API versioning and documentation, per-user isolation, idempotent creation (including concurrent duplicates), currency conversion, summary math, goals, CSV export, and authentication with correctly signed, tampered, expired and foreign `initData`.
-- **Component tests** (bUnit) cover the summary card, history search/filter/sort, the edit and delete-account dialogs, shared form inputs, goal contributions and the help dialog.
-- **Worker and Data tests** cover recurrence scheduling, outbox delivery, retries and backoff, the bot's rate limiter, CBR rate parsing, bot input parsing, currency rules, and a check that the migrations match the EF model.
+- **API integration tests** run the real application (`WebApplicationFactory`) against an in-memory SQLite database created from the migrations. They cover validation, language selection (from Telegram's `language_code` and the profile endpoint), health checks, rate limiting, API versioning and documentation, per-user isolation, idempotent creation (including concurrent duplicates), currency conversion, summary math, goals, CSV export, and authentication with correctly signed, tampered, expired and foreign `initData`.
+- **Component tests** (bUnit) cover both languages (dates, plurals, the guide, the language switch), the summary card, history search/filter/sort, the edit and delete-account dialogs, shared form inputs, goal contributions and the help dialog.
+- **Worker and Data tests** cover localized texts (and that every example in the bot's hint parses), English and Russian input, recurrence scheduling, outbox delivery, retries and backoff, the bot's rate limiter, CBR rate parsing, bot input parsing, currency rules, and a check that the migrations match the EF model.
 
 GitHub Actions runs build and tests on every push and pull request (`.github/workflows/ci.yml`); `deploy.yml` publishes the client to GitHub Pages.
 
@@ -182,7 +185,7 @@ GitHub Actions runs build and tests on every push and pull request (`.github/wor
 | GET/POST/PUT/DELETE | `/api/v1/goals[/{id}]`, `POST /{id}/contribute` | Savings goals |
 | GET/POST/PUT/DELETE | `/api/v1/recurring[/{id}]`, `POST /{id}/execute` | Recurring rules |
 | GET/POST/PUT/DELETE | `/api/v1/tags[/{id}]` | Tags |
-| GET/PUT/DELETE | `/api/v1/profile`, `/api/v1/profile/currency` | Profile, default currency, account deletion |
+| GET/PUT/DELETE | `/api/v1/profile`, `/api/v1/profile/currency`, `/api/v1/profile/language` | Profile, default currency, language (`en`/`ru`), account deletion |
 | GET/POST | `/api/v1/exchange/rates`, `/api/v1/exchange/convert` | Exchange rates |
 | GET/POST/PUT/DELETE | `/api/v1/wallets[/{id}]`, `POST /join`, `POST /{id}/invite`, `POST /{id}/leave`, `DELETE /{id}/members/{userId}` | Shared wallets and membership |
 | GET | `/api/v1/wallets/{id}/transactions`, `/api/v1/wallets/{id}/summary` | Wallet transactions with authors; totals per member and category |

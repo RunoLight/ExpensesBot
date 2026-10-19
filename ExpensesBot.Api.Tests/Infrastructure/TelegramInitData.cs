@@ -14,9 +14,12 @@ public static class TelegramInitData
         string botToken,
         long telegramUserId,
         string firstName = "Test",
-        DateTimeOffset? authDate = null)
+        DateTimeOffset? authDate = null,
+        string? languageCode = null)
     {
-        var user = JsonSerializer.Serialize(new { id = telegramUserId, first_name = firstName });
+        var user = languageCode is null
+            ? JsonSerializer.Serialize(new { id = telegramUserId, first_name = firstName })
+            : JsonSerializer.Serialize(new { id = telegramUserId, first_name = firstName, language_code = languageCode });
         var authDateUnix = (authDate ?? DateTimeOffset.UtcNow).ToUnixTimeSeconds().ToString();
 
         var fields = new SortedDictionary<string, string>(StringComparer.Ordinal)

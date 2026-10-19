@@ -7,6 +7,7 @@ using ExpensesBot.Api.Contracts.Wallets;
 using ExpensesBot.Api.Services;
 using ExpensesBot.Api.Tests.Infrastructure;
 using ExpensesBot.Data;
+using ExpensesBot.Data.Entities;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -101,23 +102,29 @@ public class WalletServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task RecordingIntoTheWallet_QueuesAMessageForTheOtherMembers()
+    public async Task RecordingIntoTheWallet_QueuesAMessageForTheOtherMembers_InTheirLanguage()
     {
         var owner = await _database.AddUserAsync(1);
-        var member = await _database.AddUserAsync(2);
+        var member = await _database.AddUserAsync(2, Languages.Russian);
+        var englishMember = await _database.AddUserAsync(3, Languages.English);
         await using var db = _database.CreateContext();
         var service = CreateService(db);
         var wallet = (await service.CreateAsync(owner.Id, new CreateWalletRequest("Семья"), default)).Value!;
         await service.JoinAsync(member.Id, new JoinWalletRequest(wallet.InviteCode!), default);
+        await service.JoinAsync(englishMember.Id, new JoinWalletRequest(wallet.InviteCode!), default);
 
         await new TransactionService(db).CreateAsync(owner.Id,
             new CreateTransactionRequest(150_000, "AMD", null, null, "Продукты", WalletId: wallet.Id), default);
         await new TransactionService(db).CreateAsync(owner.Id,
             new CreateTransactionRequest(500, "AMD", null, null, "Личное"), default);
 
-        var message = await db.OutboxMessages.SingleAsync();
-        message.UserId.Should().Be(member.Id, "the author doesn't need to hear about their own entry");
-        message.Kind.Should().Be(WalletNotifications.TransactionKind);
+        var messages = await db.OutboxMessages.ToListAsync();
+        messages.Select(m => m.UserId).Should().BeEquivalentTo(new[] { member.Id, englishMember.Id },
+            "the author doesn't need to hear about their own entry");
+        messages.Should().OnlyContain(m => m.Kind == OutboxKind.WalletTransaction);
+
+        messages.Single(m => m.UserId == englishMember.Id).Text.Should().Contain("wallet “Семья”").And.Contain("1,500.00 AMD");
+        var message = messages.Single(m => m.UserId == member.Id);
         message.Text.Should().Contain("Семья").And.Contain("1 500,00 AMD").And.Contain("Продукты");
     }
 

@@ -18,7 +18,8 @@ public sealed class ProfileService(ExpensesDbContext db)
                 x.DisplayName,
                 x.DefaultCurrency,
                 x.Transactions.Count,
-                x.Categories.Count(c => !c.IsArchived)))
+                x.Categories.Count(c => !c.IsArchived),
+                x.Language))
             .FirstOrDefaultAsync(ct);
 
         return profile is null ? Error.NotFound() : profile;
@@ -34,6 +35,19 @@ public sealed class ProfileService(ExpensesDbContext db)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.DefaultCurrency, currency), ct);
 
         return updated == 0 ? Error.NotFound() : currency;
+    }
+
+    /// <summary>Sets the language of the Mini App, the bot and notifications.</summary>
+    public async Task<Result<string>> SetLanguageAsync(long userId, SetLanguageRequest request, CancellationToken ct)
+    {
+        if (!Languages.TryNormalize(request.Language, out var language))
+            return Error.Validation($"Supported languages: {string.Join(", ", Languages.Supported)}.");
+
+        var updated = await db.Users
+            .Where(x => x.Id == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Language, language), ct);
+
+        return updated == 0 ? Error.NotFound() : language;
     }
 
     /// <summary>

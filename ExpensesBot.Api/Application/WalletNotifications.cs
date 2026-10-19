@@ -5,14 +5,13 @@ using Microsoft.EntityFrameworkCore;
 namespace ExpensesBot.Api.Application;
 
 /// <summary>
-/// Tells the other members of a shared wallet about a new transaction. Messages are
-/// added to the outbox in the caller's unit of work, so they are committed together
-/// with the transaction (or not at all); the Worker delivers them.
+/// Tells the other members of a shared wallet about a new transaction, each in their
+/// own language. Messages are added to the outbox in the caller's unit of work, so
+/// they are committed together with the transaction (or not at all); the Worker
+/// delivers them.
 /// </summary>
 public static class WalletNotifications
 {
-    public const string TransactionKind = "wallet-transaction";
-
     public static async Task QueueTransactionAsync(
         ExpensesDbContext db,
         Transaction transaction,
@@ -29,7 +28,10 @@ public static class WalletNotifications
             .Select(w => new
             {
                 w.Name,
-                Recipients = w.Members.Where(m => m.UserId != transaction.UserId).Select(m => m.UserId).ToList()
+                Recipients = w.Members
+                    .Where(m => m.UserId != transaction.UserId)
+                    .Select(m => new { m.UserId, m.User.Language })
+                    .ToList()
             })
             .FirstOrDefaultAsync(ct);
 
@@ -41,19 +43,19 @@ public static class WalletNotifications
             .Select(u => u.DisplayName)
             .FirstOrDefaultAsync(ct);
 
-        var text = Text(author ?? "Участник", wallet.Name, transaction, categoryName);
+        foreach (var recipient in wallet.Recipients)
+        {
+            var text = MessageText.For(recipient.Language);
+            var message = text.WalletTransaction(
+                author ?? text.MemberFallbackName(transaction.UserId),
+                wallet.Name,
+                transaction.Type,
+                transaction.AmountMinor,
+                transaction.Currency,
+                categoryName,
+                transaction.Note);
 
-        db.OutboxMessages.AddRange(wallet.Recipients.Select(userId =>
-            OutboxMessage.Create(userId, TransactionKind, text, nowUtc)));
-    }
-
-    public static string Text(string author, string walletName, Transaction transaction, string? categoryName)
-    {
-        var sign = transaction.Type == TransactionType.Income ? "➕" : "➖";
-        var details = string.Join(" · ", new[] { categoryName, transaction.Note }.Where(x => !string.IsNullOrWhiteSpace(x)));
-
-        return $"👥 {author} — кошелёк «{walletName}»\n" +
-               $"{sign} {Currencies.FormatMoney(transaction.AmountMinor, transaction.Currency)}" +
-               (details.Length > 0 ? $" — {details}" : "");
+            db.OutboxMessages.Add(OutboxMessage.Create(recipient.UserId, OutboxKind.WalletTransaction, message, nowUtc));
+        }
     }
 }

@@ -14,7 +14,6 @@ namespace ExpensesBot.Api.Application;
 public sealed class TransactionService(ExpensesDbContext db)
 {
     public const int MaxBulkSize = 100;
-    public const string NoCategoryName = "Без категории";
 
     /// <param name="tagId">Only transactions marked with this tag, when set.</param>
     public Task<List<TransactionResponse>> GetPageAsync(long userId, int limit, int offset, long? tagId, CancellationToken ct)
@@ -215,12 +214,13 @@ public sealed class TransactionService(ExpensesDbContext db)
     }
 
     /// <summary>
-    /// CSV export. The column layout matches what the client's import expects:
+    /// CSV export in the user's language. The column layout matches what the client's import expects:
     /// Date (UTC, yyyy-MM-dd HH:mm), Type, Category, Amount, Currency, Note.
     /// UTF-8 with BOM so Excel shows Cyrillic correctly.
     /// </summary>
     public async Task<byte[]> ExportCsvAsync(long userId, DateTime? from, DateTime? to, CancellationToken ct)
     {
+        var text = await db.TextForAsync(userId, ct);
         var query = db.Transactions.AsNoTracking().Where(x => x.UserId == userId);
 
         if (Rules.ToUtc(from) is { } fromUtc)
@@ -236,20 +236,20 @@ public sealed class TransactionService(ExpensesDbContext db)
                 x.OccurredAtUtc,
                 x.Currency,
                 x.AmountMinor,
-                CategoryName = x.Category != null ? x.Category.Name : NoCategoryName,
+                CategoryName = x.Category != null ? x.Category.Name : null,
                 x.Note,
                 x.Type
             })
             .ToListAsync(ct);
 
         var csv = new StringBuilder();
-        csv.AppendLine("Дата (UTC),Тип,Категория,Сумма,Валюта,Комментарий");
+        csv.AppendLine(text.CsvHeader);
 
         foreach (var row in rows)
         {
             csv.Append(row.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)).Append(',')
-               .Append(row.Type == EntityTransactionType.Income ? "Доход" : "Расход").Append(',')
-               .Append(CsvField(row.CategoryName)).Append(',')
+               .Append(text.TransactionTypeName(row.Type)).Append(',')
+               .Append(CsvField(row.CategoryName ?? text.NoCategory)).Append(',')
                .Append((row.AmountMinor / 100m).ToString("0.00", CultureInfo.InvariantCulture)).Append(',')
                .Append(row.Currency).Append(',')
                .Append(CsvField(row.Note))

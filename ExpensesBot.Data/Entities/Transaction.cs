@@ -22,7 +22,7 @@ public sealed class Transaction
 
     public TransactionType Type { get; set; } = TransactionType.Expense;
 
-    // Сумма в минимальных единицах валюты
+    /// <summary>Amount in minor units (cents, luma): 1 500.00 AMD is 150000.</summary>
     public long AmountMinor { get; set; }
 
     public string Currency { get; set; } = "AMD";

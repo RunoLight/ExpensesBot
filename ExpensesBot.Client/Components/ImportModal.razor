@@ -1,36 +1,36 @@
 @using System.Globalization
 @using System.Text
 
-<Modal Title="📥 Импорт CSV" Wide="true" OnClose="CloseAsync">
+<Modal Title="@T.ImportTitle" Wide="true" OnClose="CloseAsync">
     <ChildContent>
         @switch (status)
         {
             case ImportStatus.Idle:
-                <p>Загрузите CSV-файл в том же формате, что и при экспорте:</p>
-                <pre class="code-block">@SampleCsv</pre>
+                <p>@T.ImportIntro</p>
+                <pre class="code-block">@T.SampleCsv</pre>
                 <ul class="rules-list">
-                    <li><strong>Дата</strong> — <code>yyyy-MM-dd HH:mm</code> (UTC) или <code>dd.MM.yyyy</code></li>
-                    <li><strong>Тип</strong> — «Расход» или «Доход»</li>
-                    <li><strong>Категория</strong> — название существующей категории; неизвестные импортируются без категории</li>
-                    <li><strong>Сумма</strong> — число с точкой, например 1500.50</li>
-                    <li><strong>Валюта</strong> — @string.Join(", ", Money.Currencies)</li>
-                    <li><strong>Комментарий</strong> — необязательно</li>
+                    <li><strong>@T.ImportDateRule</strong> — <code>yyyy-MM-dd HH:mm</code> @T.ImportDateFormat <code>dd.MM.yyyy</code></li>
+                    <li><strong>@T.ImportTypeRule</strong> — @T.ImportTypeValues</li>
+                    <li><strong>@T.Category</strong> — @T.ImportCategoryValues</li>
+                    <li><strong>@T.Amount</strong> — @T.ImportAmountValues</li>
+                    <li><strong>@T.Currency</strong> — @string.Join(", ", Money.Currencies)</li>
+                    <li><strong>@T.Note</strong> — @T.ImportNoteValues</li>
                 </ul>
                 <input @ref="fileInput" class="file-input" type="file" accept=".csv,text/csv" @onchange="() => hasFile = true" />
                 break;
 
             case ImportStatus.Importing:
-                <p>Импорт...</p>
+                <p>@T.Importing</p>
                 <ProgressBar Value="processedCount" Max="Math.Max(totalCount, 1)" />
-                <p class="muted">@processedCount из @totalCount строк</p>
+                <p class="muted">@T.RowsProgress(processedCount, totalCount)</p>
                 break;
 
             case ImportStatus.Completed:
                 <div class="result-box result-box--success">
-                    <p>✅ Добавлено операций: <strong>@createdCount</strong></p>
+                    <p>@T.ImportedCount <strong>@createdCount</strong></p>
                     @if (errorCount > 0)
                     {
-                        <p>Пропущено строк с ошибками: <strong>@errorCount</strong></p>
+                        <p>@T.SkippedCount <strong>@errorCount</strong></p>
                     }
                 </div>
                 break;
@@ -45,10 +45,10 @@
     <Actions>
         @if (status == ImportStatus.Idle)
         {
-            <button type="button" class="btn btn--primary" disabled="@(!hasFile)" @onclick="ConfirmAndImportAsync">Загрузить</button>
+            <button type="button" class="btn btn--primary" disabled="@(!hasFile)" @onclick="ConfirmAndImportAsync">@T.Upload</button>
         }
         <button type="button" class="btn btn--secondary" disabled="@(status == ImportStatus.Importing)" @onclick="CloseAsync">
-            @(status == ImportStatus.Completed ? "Готово" : "Закрыть")
+            @(status == ImportStatus.Completed ? T.Done : T.Close)
         </button>
     </Actions>
 </Modal>
@@ -56,10 +56,7 @@
 @code {
     private const int BatchSize = 50;
 
-    private const string SampleCsv =
-        "Дата,Тип,Категория,Сумма,Валюта,Комментарий\n" +
-        "2026-01-15 14:30,Расход,Продукты,1500.50,AMD,Овощи\n" +
-        "2026-01-16 09:00,Доход,Зарплата,500000.00,AMD,Январь";
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
 
     private static readonly string[] DateFormats =
         ["yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd", "dd.MM.yyyy HH:mm", "dd.MM.yyyy"];
@@ -86,7 +83,7 @@
 
     private async Task ConfirmAndImportAsync()
     {
-        if (await JS.ConfirmAsync("Импорт создаст сразу много операций. Продолжить?"))
+        if (await JS.ConfirmAsync(T.ConfirmImport))
             await ImportAsync();
     }
 
@@ -99,14 +96,14 @@
         }
         catch (JSException ex)
         {
-            Fail($"Не удалось прочитать файл: {ex.Message}");
+            Fail(T.CannotReadFile(ex.Message));
             return;
         }
 
         var lines = (content ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Skip(1).ToList();
         if (lines.Count == 0)
         {
-            Fail("В файле нет строк с операциями.");
+            Fail(T.NoRows);
             return;
         }
 
@@ -138,7 +135,7 @@
         if (createdCount > 0)
             status = ImportStatus.Completed;
         else
-            Fail("Не удалось импортировать ни одной операции. Проверьте формат файла.");
+            Fail(T.NothingImported);
     }
 
     private async Task SendBatchAsync(List<BulkTransactionRequest> batch)

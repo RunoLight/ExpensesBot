@@ -14,8 +14,8 @@
 
 <section class="history">
     <div class="history__heading">
-        <h2>История</h2>
-        <button type="button" class="btn-icon-textless btn-icon-textless--primary" disabled="@Saving" @onclick="OnRefresh">Обновить</button>
+        <h2>@T.History</h2>
+        <button type="button" class="btn-icon-textless btn-icon-textless--primary" disabled="@Saving" @onclick="OnRefresh">@T.Refresh</button>
     </div>
 
     @{
@@ -24,22 +24,22 @@
 
     @if (Transactions.Count == 0)
     {
-        <EmptyState Icon="🧾" Title="Пока пусто">
-            <p>Добавьте первую операцию в форме выше или отправьте сумму боту.</p>
+        <EmptyState Icon="🧾" Title="@T.Empty">
+            <p>@T.HistoryEmpty</p>
         </EmptyState>
     }
     else if (visible.Count == 0)
     {
-        <EmptyState Icon="🔍" Title="Ничего не найдено">
-            <p>Попробуйте изменить параметры поиска.</p>
+        <EmptyState Icon="🔍" Title="@T.NothingFound">
+            <p>@T.ChangeSearch</p>
         </EmptyState>
     }
     else
     {
         @foreach (var transaction in visible)
         {
-            var name = transaction.CategoryName ?? "Без категории";
-            var occurredAt = transaction.OccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+            var name = transaction.CategoryName ?? T.NoCategory;
+            var occurredAt = T.DateTime(transaction.OccurredAtUtc.ToLocalTime());
             <article class="transaction-row" @key="transaction.Id">
                 <div class="transaction-row__icon">@Categories.IconFor(transaction.CategoryId)</div>
                 <div class="transaction-row__info">
@@ -74,8 +74,8 @@
                         {
                             <span class="transaction-row__converted">~@Money.Format(converted) @SelectedCurrency</span>
                         }
-                        <button type="button" class="btn-icon-textless" title="Редактировать" @onclick="() => OnEdit.InvokeAsync(transaction)">✏️</button>
-                        <button type="button" class="btn-icon-textless btn-icon-textless--danger" title="Удалить" @onclick="() => ConfirmAndDeleteAsync(transaction.Id, name)">✕</button>
+                        <button type="button" class="btn-icon-textless" title="@T.Edit" @onclick="() => OnEdit.InvokeAsync(transaction)">✏️</button>
+                        <button type="button" class="btn-icon-textless btn-icon-textless--danger" title="@T.Delete" @onclick="() => ConfirmAndDeleteAsync(transaction.Id, name)">✕</button>
                     </div>
                 </div>
             </article>
@@ -84,6 +84,7 @@
 </section>
 
 @code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
     [Parameter] public List<TransactionDto> Transactions { get; set; } = [];
     [Parameter] public List<CategoryDto> Categories { get; set; } = [];
     [Parameter] public List<TagDto> Tags { get; set; } = [];
@@ -148,7 +149,7 @@
 
     private string? WalletName(TransactionDto transaction) =>
         transaction.WalletId is { } walletId
-            ? Wallets.FirstOrDefault(w => w.Id == walletId)?.Name ?? "общий кошелёк"
+            ? Wallets.FirstOrDefault(w => w.Id == walletId)?.Name ?? T.SharedWallet
             : null;
 
     private List<TagDto> TagsOf(TransactionDto transaction) =>
@@ -170,7 +171,7 @@
 
     private async Task ConfirmAndDeleteAsync(long id, string name)
     {
-        if (await JS.ConfirmAsync($"Удалить операцию «{name}»? Это действие нельзя отменить."))
+        if (await JS.ConfirmAsync(T.ConfirmDeleteTransaction(name)))
             await OnDelete.InvokeAsync(id);
     }
 }
