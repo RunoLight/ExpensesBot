@@ -11,6 +11,12 @@ public sealed class TransactionFormModel
 
     /// <summary>Shared wallet to record into; null records a personal transaction.</summary>
     public long? WalletId { get; set; }
+
+    /// <summary>
+    /// Sent as the Idempotency-Key header. The form is replaced after a successful
+    /// save, so a double tap or a retry of the same entry reuses the key.
+    /// </summary>
+    public string IdempotencyKey { get; } = Guid.NewGuid().ToString();
 }
 
 public sealed class NewCategoryForm

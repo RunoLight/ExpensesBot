@@ -119,6 +119,15 @@ public sealed class ExpensesDbContext(
         modelBuilder.Entity<Transaction>()
             .HasIndex(x => new { x.UserId, x.OccurredAtUtc });
 
+        modelBuilder.Entity<Transaction>()
+            .Property(x => x.IdempotencyKey)
+            .HasMaxLength(Transaction.MaxIdempotencyKeyLength);
+
+        // SQLite treats NULLs as distinct, so only keyed transactions are constrained.
+        modelBuilder.Entity<Transaction>()
+            .HasIndex(x => new { x.UserId, x.IdempotencyKey })
+            .IsUnique();
+
         modelBuilder.Entity<Tag>()
             .HasOne(x => x.User)
             .WithMany()

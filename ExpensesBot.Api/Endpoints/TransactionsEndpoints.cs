@@ -3,6 +3,7 @@ using ExpensesBot.Api.Application;
 using ExpensesBot.Api.Authentication;
 using ExpensesBot.Api.Common;
 using ExpensesBot.Api.Contracts.Transactions;
+using Microsoft.AspNetCore.Mvc;
 
 namespace ExpensesBot.Api.Endpoints;
 
@@ -21,8 +22,10 @@ public static class TransactionsEndpoints
         group.MapGet("/{id:long}", async (long id, ClaimsPrincipal user, TransactionService service, CancellationToken ct) =>
             (await service.GetAsync(user.GetUserId(), id, ct)).ToOk());
 
-        group.MapPost("/", async (CreateTransactionRequest request, ClaimsPrincipal user, TransactionService service, CancellationToken ct) =>
-            (await service.CreateAsync(user.GetUserId(), request, ct)).ToCreated(t => $"/api/transactions/{t.Id}"));
+        // A retried POST with the same Idempotency-Key returns the original transaction.
+        group.MapPost("/", async (CreateTransactionRequest request, ClaimsPrincipal user, TransactionService service, CancellationToken ct,
+                [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey) =>
+            (await service.CreateAsync(user.GetUserId(), request, ct, idempotencyKey)).ToCreated(t => $"/api/transactions/{t.Id}"));
 
         group.MapPost("/bulk", async (List<CreateTransactionRequest>? requests, ClaimsPrincipal user, TransactionService service, CancellationToken ct) =>
             (await service.BulkCreateAsync(user.GetUserId(), requests, ct)).ToOk());

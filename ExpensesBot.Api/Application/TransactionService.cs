@@ -44,17 +44,77 @@ public sealed class TransactionService(ExpensesDbContext db)
         return transaction is null ? Error.NotFound() : transaction;
     }
 
-    public async Task<Result<TransactionResponse>> CreateAsync(long userId, CreateTransactionRequest request, CancellationToken ct)
+    /// <param name="idempotencyKey">
+    /// Optional client-generated key. Repeating a request with the same key returns the
+    /// transaction created the first time instead of recording a duplicate; reusing the
+    /// key for a different amount, currency, type, category or wallet is rejected.
+    /// </param>
+    public async Task<Result<TransactionResponse>> CreateAsync(
+        long userId,
+        CreateTransactionRequest request,
+        CancellationToken ct,
+        string? idempotencyKey = null)
     {
+        if (idempotencyKey is not null)
+        {
+            if (Rules.ValidateIdempotencyKey(idempotencyKey) is { } keyError)
+                return keyError;
+
+            if (await FindReplayAsync(userId, idempotencyKey, request, ct) is { } replay)
+                return replay;
+        }
+
         var built = await BuildAsync(userId, request, ct);
         if (!built.IsSuccess)
             return built.Error!;
 
         var (transaction, categoryName) = built.Value;
+        transaction.IdempotencyKey = idempotencyKey;
         db.Transactions.Add(transaction);
-        await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException) when (idempotencyKey is not null)
+        {
+            // A concurrent request with the same key won the unique index: answer with its result.
+            db.ChangeTracker.Clear();
+            if (await FindReplayAsync(userId, idempotencyKey, request, ct) is { } replay)
+                return replay;
+
+            throw;
+        }
 
         return ToResponse(transaction, categoryName);
+    }
+
+    /// <summary>The earlier result for this key, a mismatch error, or null when the key is new.</summary>
+    private async Task<Result<TransactionResponse>?> FindReplayAsync(
+        long userId,
+        string idempotencyKey,
+        CreateTransactionRequest request,
+        CancellationToken ct)
+    {
+        var existing = await db.Transactions
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && x.IdempotencyKey == idempotencyKey)
+            .Select(x => new { x.Id, x.AmountMinor, x.Currency, x.Type, x.CategoryId, x.WalletId })
+            .FirstOrDefaultAsync(ct);
+
+        if (existing is null)
+            return null;
+
+        var sameRequest = existing.AmountMinor == request.AmountMinor &&
+                          string.Equals(existing.Currency, request.Currency?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                          existing.Type == (EntityTransactionType)request.Type &&
+                          existing.CategoryId == request.CategoryId &&
+                          existing.WalletId == request.WalletId;
+
+        if (!sameRequest)
+            return Error.Unprocessable("This Idempotency-Key was already used for a different transaction.");
+
+        return await GetAsync(userId, existing.Id, ct);
     }
 
     /// <summary>

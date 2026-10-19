@@ -5,7 +5,8 @@ public enum ErrorKind
     Validation,
     NotFound,
     Conflict,
-    Forbidden
+    Forbidden,
+    Unprocessable
 }
 
 /// <summary>An expected failure of a business operation (not an exception).</summary>
@@ -19,6 +20,9 @@ public sealed record Error(ErrorKind Kind, string Message)
 
     /// <summary>The caller can see the resource but may not do this (e.g. a member managing a wallet).</summary>
     public static Error Forbidden(string message) => new(ErrorKind.Forbidden, message);
+
+    /// <summary>The request is well-formed but contradicts earlier state (e.g. a reused Idempotency-Key).</summary>
+    public static Error Unprocessable(string message) => new(ErrorKind.Unprocessable, message);
 }
 
 /// <summary>Outcome of an operation that returns nothing on success.</summary>

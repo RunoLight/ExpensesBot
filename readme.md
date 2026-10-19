@@ -80,6 +80,7 @@ flowchart LR
 - **The bot is stateless.** One handler serves every chat, so type, amount, currency and category travel inside the button's `callback_data` (`tx:e:1500:AMD:12`, at most 64 bytes). The note doesn't fit, so the bot's question is sent as a reply to the user's message and the handler re-parses the note from `reply_to_message`. The confirmation message is edited after recording, so a second tap can't create a duplicate.
 - **Free-form input is a pure function.** `BotEntryParser` (regex: amount first or last, sign, currency symbol or word, `к`/`тыс` multiplier) and `CategoryGuesser` (same note before → category name in the note → keywords) have no I/O and are covered by table-driven tests.
 - **Resource-level authorization for shared wallets.** Authentication says who the user is; `WalletService` decides per wallet: non-members get 404 (existence isn't revealed), members can read and record, only the owner may rename, re-key the invite, remove members or delete (403). A transaction keeps its author as owner, so personal statistics and edit rights don't change; leaving or deleting a wallet turns its transactions back into personal ones (`ON DELETE SET NULL`). Joining is shared by the API and the bot (`WalletInvites` in the Data project).
+- **Creating a transaction is idempotent.** `POST /api/transactions` accepts an `Idempotency-Key` header. The key is stored on the transaction under a unique `(UserId, IdempotencyKey)` index: a repeated request returns the original transaction, a concurrent duplicate loses the race on the index and gets the same answer, and reusing a key for a different amount, currency, type, category or wallet is rejected with 422. The Mini App generates one key per form, so a double tap or a network retry can't record the same entry twice.
 - **Notifications are idempotent.** Every sent reminder, weekly report and budget alert is recorded in `NotificationLogs` with a unique `(UserId, Kind, Key)` index. The Worker checks it before sending, so restarts never resend a message, and only transient Telegram failures (network, 5xx, 429) are retried.
 - **One SQLite file, two processes.** The API and the Worker share the database. Relative paths are resolved against the repository root so both open the same file, and both apply migrations at startup under EF Core's migration lock.
 
@@ -146,7 +147,7 @@ dotnet test ExpensesBot.slnx
 ```
 
 - **Application service tests** exercise summary math, budget and goal progress directly against a migrated in-memory SQLite database with a fixed clock.
-- **API integration tests** run the real application (`WebApplicationFactory`) against an in-memory SQLite database created from the migrations. They cover validation, per-user isolation, currency conversion, summary math, goals, CSV export, and authentication with correctly signed, tampered, expired and foreign `initData`.
+- **API integration tests** run the real application (`WebApplicationFactory`) against an in-memory SQLite database created from the migrations. They cover validation, per-user isolation, idempotent creation (including concurrent duplicates), currency conversion, summary math, goals, CSV export, and authentication with correctly signed, tampered, expired and foreign `initData`.
 - **Component tests** (bUnit) cover the summary card, history search/filter/sort, the edit and delete-account dialogs, shared form inputs, goal contributions and the help dialog.
 - **Worker and Data tests** cover recurrence scheduling, CBR rate parsing, bot input parsing, currency rules, and a check that the migrations match the EF model.
 
@@ -156,7 +157,7 @@ GitHub Actions runs build and tests on every push and pull request (`.github/wor
 
 | Method | Route | Purpose |
 |---|---|---|
-| GET/POST/PUT/DELETE | `/api/transactions[/{id}]` | Transactions (paged list with optional `tagId` filter, create, update, delete) |
+| GET/POST/PUT/DELETE | `/api/transactions[/{id}]` | Transactions (paged list with optional `tagId` filter, create with optional `Idempotency-Key`, update, delete) |
 | POST | `/api/transactions/bulk` | Create up to 100 transactions, with per-row errors |
 | GET | `/api/transactions/summary?mode=all\|30days\|month&currency=AMD` | Totals, breakdowns, average and projection |
 | GET | `/api/transactions/export` | CSV export |
@@ -179,7 +180,7 @@ In Development the OpenAPI document is served at `/openapi/v1.json`.
 - [x] Editing budgets, goals and tags
 - [x] Tag filters
 - [ ] Voice input — send a voice message like «потратил три тысячи на продукты»; speech-to-text, then the same parser as typed entries
-- [ ] Idempotent transaction creation — an `Idempotency-Key` header so a double tap or a network retry never creates a duplicate
+- [x] Idempotent transaction creation — an `Idempotency-Key` header so a double tap or a network retry never creates a duplicate
 - [ ] Outbox for notifications — the API and the Worker write events to a table; a separate dispatcher delivers them to Telegram with retries
 - [ ] Observability — OpenTelemetry traces and metrics, structured logging with Serilog, `/health` checking the database and Telegram (possibly via .NET Aspire)
 - [ ] Rate limiting (`AddRateLimiter`) for the API and the bot

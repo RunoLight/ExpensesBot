@@ -296,7 +296,8 @@
             await Api.CreateTransactionAsync(
                 amountMinor, form.Currency, form.CategoryId, form.Note, form.Type,
                 selectedTagIds.Count > 0 ? selectedTagIds.ToList() : null,
-                form.WalletId);
+                form.WalletId,
+                form.IdempotencyKey);
 
             selectedTagIds.Clear();
             form = new TransactionFormModel { Currency = form.Currency, Type = form.Type, WalletId = form.WalletId };

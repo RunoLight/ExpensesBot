@@ -8,6 +8,8 @@ public enum TransactionType
 
 public sealed class Transaction
 {
+    public const int MaxIdempotencyKeyLength = 64;
+
     public long Id { get; set; }
 
     public long UserId { get; set; }
@@ -35,6 +37,13 @@ public sealed class Transaction
     public long? WalletId { get; set; }
 
     public Wallet? Wallet { get; set; }
+
+    /// <summary>
+    /// Client-supplied Idempotency-Key the transaction was created with. Unique per
+    /// user, so a retried or double-submitted request finds this row instead of
+    /// creating a second one.
+    /// </summary>
+    public string? IdempotencyKey { get; set; }
 
     public List<TransactionTag> TransactionTags { get; set; } = [];
 }

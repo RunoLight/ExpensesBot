@@ -260,4 +260,79 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
         (await db.Transactions.AnyAsync(t => t.UserId == profile!.Id)).Should().BeFalse();
         (await db.Categories.AnyAsync(c => c.UserId == profile!.Id)).Should().BeFalse();
     }
+
+    private static Task<HttpResponseMessage> PostWithKeyAsync(HttpClient client, string key, object request)
+    {
+        var message = new HttpRequestMessage(HttpMethod.Post, "/api/transactions") { Content = JsonContent.Create(request) };
+        message.Headers.Add("Idempotency-Key", key);
+        return client.SendAsync(message);
+    }
+
+    [Fact]
+    public async Task CreateTransaction_SameIdempotencyKey_ReturnsTheFirstTransaction()
+    {
+        var client = factory.CreateClientForDevUser(100_101);
+        var key = Guid.NewGuid().ToString();
+
+        var first = await PostWithKeyAsync(client, key, Transaction(1_500, note: "coffee"));
+        var retry = await PostWithKeyAsync(client, key, Transaction(1_500, note: "coffee"));
+
+        first.StatusCode.Should().Be(HttpStatusCode.Created);
+        retry.StatusCode.Should().Be(HttpStatusCode.Created);
+        var original = await first.Content.ReadFromJsonAsync<TransactionResponse>();
+        var replayed = await retry.Content.ReadFromJsonAsync<TransactionResponse>();
+        replayed!.Id.Should().Be(original!.Id);
+
+        var all = await client.GetFromJsonAsync<List<TransactionResponse>>("/api/transactions");
+        all.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task CreateTransaction_ConcurrentRequestsWithOneKey_CreateOneTransaction()
+    {
+        var client = factory.CreateClientForDevUser(100_102);
+        var key = Guid.NewGuid().ToString();
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 5)
+            .Select(_ => PostWithKeyAsync(client, key, Transaction(700))));
+
+        responses.Should().OnlyContain(r => r.StatusCode == HttpStatusCode.Created);
+        var all = await client.GetFromJsonAsync<List<TransactionResponse>>("/api/transactions");
+        all.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task CreateTransaction_KeyReusedForAnotherAmount_ReturnsUnprocessable()
+    {
+        var client = factory.CreateClientForDevUser(100_103);
+        var key = Guid.NewGuid().ToString();
+
+        await PostWithKeyAsync(client, key, Transaction(1_000));
+        var response = await PostWithKeyAsync(client, key, Transaction(2_000));
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task CreateTransaction_SameKeyFromAnotherUser_IsIndependent()
+    {
+        var key = Guid.NewGuid().ToString();
+
+        var first = await PostWithKeyAsync(factory.CreateClientForDevUser(100_104), key, Transaction(1_000));
+        var second = await PostWithKeyAsync(factory.CreateClientForDevUser(100_105), key, Transaction(1_000));
+
+        var a = await first.Content.ReadFromJsonAsync<TransactionResponse>();
+        var b = await second.Content.ReadFromJsonAsync<TransactionResponse>();
+        b!.Id.Should().NotBe(a!.Id);
+    }
+
+    [Fact]
+    public async Task CreateTransaction_InvalidIdempotencyKey_ReturnsBadRequest()
+    {
+        var client = factory.CreateClientForDevUser(100_106);
+
+        var response = await PostWithKeyAsync(client, new string('k', 65), Transaction(1_000));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
 }

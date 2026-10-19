@@ -1,5 +1,6 @@
 using ExpensesBot.Api.Common;
 using ExpensesBot.Data;
+using ExpensesBot.Data.Entities;
 
 namespace ExpensesBot.Api.Application;
 
@@ -29,6 +30,12 @@ public static class Rules
             ? Error.Validation($"Note cannot exceed {MaxNoteLength} characters.")
             : null;
     }
+
+    /// <summary>An Idempotency-Key is 1–64 visible ASCII characters (a UUID fits comfortably).</summary>
+    public static Error? ValidateIdempotencyKey(string key) =>
+        key.Length is 0 or > Transaction.MaxIdempotencyKeyLength || key.Any(c => c is < '!' or > '~')
+            ? Error.Validation($"Idempotency-Key must be 1 to {Transaction.MaxIdempotencyKeyLength} visible ASCII characters.")
+            : null;
 
     /// <summary>Treats unspecified DateTime values as UTC and converts local ones.</summary>
     public static DateTime? ToUtc(DateTime? value) =>

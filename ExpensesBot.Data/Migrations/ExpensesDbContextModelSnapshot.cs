@@ -284,6 +284,10 @@ namespace ExpensesBot.Data.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Note")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
@@ -305,6 +309,9 @@ namespace ExpensesBot.Data.Migrations
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("WalletId");
+
+                    b.HasIndex("UserId", "IdempotencyKey")
+                        .IsUnique();
 
                     b.HasIndex("UserId", "OccurredAtUtc");
 

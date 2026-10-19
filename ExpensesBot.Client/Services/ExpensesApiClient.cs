@@ -36,6 +36,7 @@ public sealed class ExpensesApiClient(HttpClient http)
         TransactionType type = TransactionType.Expense,
         IEnumerable<long>? tagIds = null,
         long? walletId = null,
+        string? idempotencyKey = null,
         CancellationToken ct = default) =>
         SendAsync<TransactionDto>(HttpMethod.Post, "api/transactions", new
         {
@@ -47,7 +48,7 @@ public sealed class ExpensesApiClient(HttpClient http)
             Type = type,
             TagIds = tagIds?.ToList(),
             WalletId = walletId
-        }, ct);
+        }, ct, idempotencyKey);
 
     public Task<TransactionDto> UpdateTransactionAsync(
         long id,
@@ -276,18 +277,23 @@ public sealed class ExpensesApiClient(HttpClient http)
         using var response = await SendCoreAsync(method, url, body, ct);
     }
 
-    private async Task<T> SendAsync<T>(HttpMethod method, string url, object? body, CancellationToken ct)
+    private async Task<T> SendAsync<T>(HttpMethod method, string url, object? body, CancellationToken ct,
+        string? idempotencyKey = null)
     {
-        using var response = await SendCoreAsync(method, url, body, ct);
+        using var response = await SendCoreAsync(method, url, body, ct, idempotencyKey);
         return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct)
                ?? throw new InvalidOperationException("API returned an empty response.");
     }
 
-    private async Task<HttpResponseMessage> SendCoreAsync(HttpMethod method, string url, object? body, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendCoreAsync(HttpMethod method, string url, object? body, CancellationToken ct,
+        string? idempotencyKey = null)
     {
         using var request = new HttpRequestMessage(method, url);
         if (body is not null)
             request.Content = JsonContent.Create(body, body.GetType());
+
+        if (idempotencyKey is not null)
+            request.Headers.Add("Idempotency-Key", idempotencyKey);
 
         var response = await http.SendAsync(request, ct);
         if (response.IsSuccessStatusCode)
