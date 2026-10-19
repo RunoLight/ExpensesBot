@@ -22,11 +22,6 @@ public class Worker(
 
     private long _lastUpdateId;
     private DateTime _lastMaintenanceUtc = DateTime.MinValue;
-    private DateTime _lastDailyReminderDate = DateTime.MinValue;
-    private DateTime _lastWeeklyReportDate = DateTime.MinValue;
-
-    // Budgets that already triggered the 90% alert since the Worker started.
-    private readonly HashSet<long> _budgetAlertsSent = [];
 
     private int DailyReminderHourUtc =>
         configuration.GetValue("Telegram:DailyReminderHourUtc", 17);
@@ -178,22 +173,27 @@ public class Worker(
             logger.LogInformation("Created {Count} transactions from recurring rules", created);
     }
 
+    /// <summary>
+    /// Sends the evening reminder, the Sunday report and budget alerts. What was
+    /// already sent is stored in the database (<see cref="NotificationLedger"/>),
+    /// so this can run every few minutes and survive restarts without duplicates.
+    /// </summary>
     private async Task SendScheduledNotificationsAsync(string botToken, CancellationToken ct)
     {
         using var scope = serviceProvider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
         var notifications = scope.ServiceProvider.GetRequiredService<NotificationService>();
+        var ledger = new NotificationLedger(db);
 
         var now = DateTime.UtcNow;
         var today = now.Date;
         var tomorrow = today.AddDays(1);
+        var todayKey = NotificationLedger.DateKey(today);
         var activeSince = now.AddDays(-7);
         var isReminderHour = now.Hour == DailyReminderHourUtc;
+        var isReportDay = now.DayOfWeek == DayOfWeek.Sunday;
 
-        var sendDaily = isReminderHour && _lastDailyReminderDate != today;
-        var sendWeekly = isReminderHour && now.DayOfWeek == DayOfWeek.Sunday && _lastWeeklyReportDate != today;
-
-        if (sendDaily || sendWeekly)
+        if (isReminderHour)
         {
             // Users who recorded something during the last week.
             var activeUsers = await db.Users
@@ -201,32 +201,36 @@ public class Worker(
                 .Where(u => u.Transactions.Any(t => t.CreatedAtUtc >= activeSince))
                 .ToListAsync(ct);
 
-            if (sendDaily)
+            foreach (var user in activeUsers)
             {
-                foreach (var user in activeUsers)
-                {
-                    var spentMinor = await SumExpensesAsync(db, user, today, tomorrow, ct);
+                if (await ledger.WasSentAsync(user.Id, NotificationKind.DailyReminder, todayKey, ct))
+                    continue;
 
-                    await notifications.SendDailyReminderAsync(
-                        botToken,
-                        user.TelegramUserId,
-                        user.DisplayName ?? "друг",
-                        spentMinor,
-                        user.DefaultCurrency,
-                        ct);
+                var spentMinor = await SumExpensesAsync(db, user, today, tomorrow, ct);
 
-                    await Task.Delay(DelayBetweenMessages, ct);
-                }
+                var settled = await notifications.SendDailyReminderAsync(
+                    botToken,
+                    user.TelegramUserId,
+                    user.DisplayName ?? "друг",
+                    spentMinor,
+                    user.DefaultCurrency,
+                    ct);
 
-                _lastDailyReminderDate = today;
+                if (settled)
+                    await ledger.MarkSentAsync(user.Id, NotificationKind.DailyReminder, todayKey, now, ct);
+
+                await Task.Delay(DelayBetweenMessages, ct);
             }
 
-            if (sendWeekly)
+            if (isReportDay)
             {
                 var weekStart = tomorrow.AddDays(-7);
 
                 foreach (var user in activeUsers)
                 {
+                    if (await ledger.WasSentAsync(user.Id, NotificationKind.WeeklyReport, todayKey, ct))
+                        continue;
+
                     var spentMinor = await SumExpensesAsync(db, user, weekStart, tomorrow, ct);
                     if (spentMinor <= 0)
                         continue;
@@ -243,7 +247,7 @@ public class Worker(
                         .Take(5)
                         .ToListAsync(ct);
 
-                    await notifications.SendWeeklyReportAsync(
+                    var settled = await notifications.SendWeeklyReportAsync(
                         botToken,
                         user.TelegramUserId,
                         user.DisplayName ?? "друг",
@@ -252,19 +256,23 @@ public class Worker(
                         topCategories.Select(x => (x.Name, x.Total)).ToList(),
                         ct);
 
+                    if (settled)
+                        await ledger.MarkSentAsync(user.Id, NotificationKind.WeeklyReport, todayKey, now, ct);
+
                     await Task.Delay(DelayBetweenMessages, ct);
                 }
-
-                _lastWeeklyReportDate = today;
             }
+
+            await ledger.PruneAsync(now, ct);
         }
 
-        await SendBudgetAlertsAsync(db, notifications, botToken, now, ct);
+        await SendBudgetAlertsAsync(db, notifications, ledger, botToken, now, ct);
     }
 
-    private async Task SendBudgetAlertsAsync(
+    private static async Task SendBudgetAlertsAsync(
         ExpensesDbContext db,
         NotificationService notifications,
+        NotificationLedger ledger,
         string botToken,
         DateTime now,
         CancellationToken ct)
@@ -278,7 +286,8 @@ public class Worker(
 
         foreach (var budget in activeBudgets)
         {
-            if (_budgetAlertsSent.Contains(budget.Id))
+            var key = NotificationLedger.BudgetKey(budget.Id);
+            if (await ledger.WasSentAsync(budget.UserId, NotificationKind.BudgetAlert, key, ct))
                 continue;
 
             var spentMinor = await db.Transactions
@@ -293,7 +302,7 @@ public class Worker(
             if (budget.AmountMinor <= 0 || spentMinor < budget.AmountMinor * 0.9m)
                 continue;
 
-            await notifications.SendBudgetAlertAsync(
+            var settled = await notifications.SendBudgetAlertAsync(
                 botToken,
                 budget.User.TelegramUserId,
                 budget.Category?.Name ?? "Общий",
@@ -302,7 +311,8 @@ public class Worker(
                 budget.Currency,
                 ct);
 
-            _budgetAlertsSent.Add(budget.Id);
+            if (settled)
+                await ledger.MarkSentAsync(budget.UserId, NotificationKind.BudgetAlert, key, now, ct);
         }
     }
 

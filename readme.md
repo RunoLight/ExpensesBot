@@ -76,6 +76,7 @@ flowchart LR
 - **Development login is Development-only.** For local work the API also accepts `X-Dev-User-Id`, but only when `ASPNETCORE_ENVIRONMENT=Development`, and Release builds of the client never send it. A test starts the API as Production and checks that the header is ignored.
 - **Cross-currency totals are converted, never summed raw.** The summary endpoint converts every transaction into the requested display currency using the latest stored rates (with clearly flagged fallback rates if none are stored yet).
 - **The bot is stateless.** One handler serves every chat, so the transaction type and amount travel inside the button's `callback_data` (`tx:i:1500`). The confirmation message is edited after recording, so a second tap can't create a duplicate.
+- **Notifications are idempotent.** Every sent reminder, weekly report and budget alert is recorded in `NotificationLogs` with a unique `(UserId, Kind, Key)` index. The Worker checks it before sending, so restarts never resend a message, and only transient Telegram failures (network, 5xx, 429) are retried.
 - **One SQLite file, two processes.** The API and the Worker share the database. Relative paths are resolved against the repository root so both open the same file, and both apply migrations at startup under EF Core's migration lock.
 
 ## Getting started
@@ -166,7 +167,7 @@ In Development the OpenAPI document is served at `/openapi/v1.json`.
 
 ## Roadmap
 
-- [ ] Persist notification state so restarts never resend alerts
+- [x] Persist notification state so restarts never resend alerts
 - [ ] Move to PostgreSQL for multi-instance deployments
 - [ ] Editing budgets, goals and tags; tag filters
 

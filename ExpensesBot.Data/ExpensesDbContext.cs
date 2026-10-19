@@ -16,6 +16,7 @@ public sealed class ExpensesDbContext(
     public DbSet<Goal> Goals => Set<Goal>();
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<TransactionTag> TransactionTags => Set<TransactionTag>();
+    public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -132,5 +133,21 @@ public sealed class ExpensesDbContext(
 
         modelBuilder.Entity<TransactionTag>()
             .HasKey(x => new { x.TransactionId, x.TagId });
+
+        modelBuilder.Entity<NotificationLog>()
+            .HasOne(x => x.User)
+            .WithMany()
+            .HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<NotificationLog>()
+            .Property(x => x.Key)
+            .HasMaxLength(64);
+
+        // One row per (user, kind, subject): a second insert for the same
+        // notification fails, which also protects against two Worker instances.
+        modelBuilder.Entity<NotificationLog>()
+            .HasIndex(x => new { x.UserId, x.Kind, x.Key })
+            .IsUnique();
     }
 }

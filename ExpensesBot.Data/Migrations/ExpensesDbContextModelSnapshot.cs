@@ -153,6 +153,34 @@ namespace ExpensesBot.Data.Migrations
                     b.ToTable("Goals");
                 });
 
+            modelBuilder.Entity("ExpensesBot.Data.Entities.NotificationLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("SentAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Kind", "Key")
+                        .IsUnique();
+
+                    b.ToTable("NotificationLogs");
+                });
+
             modelBuilder.Entity("ExpensesBot.Data.Entities.RecurringTransaction", b =>
                 {
                     b.Property<long>("Id")
@@ -364,6 +392,17 @@ namespace ExpensesBot.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Category");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ExpensesBot.Data.Entities.NotificationLog", b =>
+                {
+                    b.HasOne("ExpensesBot.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("User");
                 });

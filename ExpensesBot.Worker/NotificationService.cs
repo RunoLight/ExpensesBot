@@ -7,6 +7,10 @@ namespace ExpensesBot.Worker;
 /// Sends scheduled messages to users. Messages are plain text on purpose:
 /// with parse_mode=Markdown, a "_" or "*" in a user or category name makes
 /// Telegram reject the whole message.
+///
+/// Every method returns true when the message is settled — delivered, or
+/// rejected for good (for example, the user blocked the bot) — and false when
+/// sending should be retried later (network error, Telegram 5xx or 429).
 /// </summary>
 public sealed class NotificationService(
     ILogger<NotificationService> logger,
@@ -19,7 +23,7 @@ public sealed class NotificationService(
         NumberDecimalSeparator = ","
     };
 
-    public Task SendDailyReminderAsync(
+    public Task<bool> SendDailyReminderAsync(
         string botToken,
         long telegramUserId,
         string displayName,
@@ -35,7 +39,7 @@ public sealed class NotificationService(
         return SendAsync(botToken, telegramUserId, text, "daily reminder", ct);
     }
 
-    public Task SendWeeklyReportAsync(
+    public Task<bool> SendWeeklyReportAsync(
         string botToken,
         long telegramUserId,
         string displayName,
@@ -61,7 +65,7 @@ public sealed class NotificationService(
         return SendAsync(botToken, telegramUserId, string.Join("\n", lines), "weekly report", ct);
     }
 
-    public Task SendBudgetAlertAsync(
+    public Task<bool> SendBudgetAlertAsync(
         string botToken,
         long telegramUserId,
         string categoryName,
@@ -81,7 +85,7 @@ public sealed class NotificationService(
     public static string FormatMoney(long amountMinor, string currency) =>
         $"{(amountMinor / 100m).ToString("N2", MoneyFormat)} {currency}";
 
-    private async Task SendAsync(
+    private async Task<bool> SendAsync(
         string botToken,
         long telegramUserId,
         string text,
@@ -103,14 +107,24 @@ public sealed class NotificationService(
                     "Telegram rejected {Kind} for user {UserId}: {Status} {Body}",
                     kind, telegramUserId, (int)response.StatusCode,
                     await response.Content.ReadAsStringAsync(ct));
-                return;
+
+                return IsPermanentFailure((int)response.StatusCode);
             }
 
             logger.LogInformation("Sent {Kind} to user {UserId}", kind, telegramUserId);
+            return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex, "Failed to send {Kind} to user {UserId}", kind, telegramUserId);
+            return false;
         }
     }
+
+    /// <summary>
+    /// 4xx answers (bot blocked, chat not found) will not change on retry;
+    /// 429 (rate limit) and 5xx will.
+    /// </summary>
+    public static bool IsPermanentFailure(int statusCode) =>
+        statusCode is >= 400 and < 500 and not 429;
 }
