@@ -191,6 +191,7 @@ Every route is versioned in the path (`/api/v1/…`). In Development the OpenAPI
 
 ## Roadmap
 
+- [ ] Verify the Docker images — `docker compose build` and a smoke run of both containers after the ServiceDefaults project and the Worker's switch to the `aspnet` base image
 - [x] Persist notification state so restarts never resend alerts
 - [ ] Move to PostgreSQL for multi-instance deployments
 - [x] Editing budgets, goals and tags
