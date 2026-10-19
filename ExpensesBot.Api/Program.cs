@@ -14,7 +14,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Serilog, OpenTelemetry (traces, metrics, OTLP when configured) and the base health check.
 builder.AddServiceDefaults();
 
-builder.Services.AddOpenApi();
+// api-version header/query (1.0 when omitted), one OpenAPI document per version.
+builder.Services.AddVersionedApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton(TimeProvider.System);
 
@@ -84,18 +85,20 @@ app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    // /openapi/v1.json and the Scalar UI at /scalar.
+    app.MapApiDocumentation();
 }
 
-app.MapTransactionsEndpoints();
-app.MapCategoriesEndpoints();
-app.MapRecurringTransactionsEndpoints();
-app.MapBudgetsEndpoints();
-app.MapGoalsEndpoints();
-app.MapExchangeEndpoints();
-app.MapProfileEndpoints();
-app.MapTagEndpoints();
-app.MapWalletsEndpoints();
+var api = app.MapVersionedApi();
+api.MapTransactionsEndpoints();
+api.MapCategoriesEndpoints();
+api.MapRecurringTransactionsEndpoints();
+api.MapBudgetsEndpoints();
+api.MapGoalsEndpoints();
+api.MapExchangeEndpoints();
+api.MapProfileEndpoints();
+api.MapTagEndpoints();
+api.MapWalletsEndpoints();
 
 app.MapDefaultEndpoints();
 
