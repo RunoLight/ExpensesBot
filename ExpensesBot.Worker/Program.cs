@@ -14,6 +14,8 @@ builder.Services.AddDbContext<ExpensesDbContext>(options =>
     options.UseSqlite(DatabaseConnection.Resolve(
         builder.Configuration.GetConnectionString("ExpensesDatabase"))));
 
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<BotRateLimiter>();
 builder.Services.AddSingleton<TelegramSender>();
 builder.Services.AddSingleton<TelegramBotHandler>();
 builder.Services.AddSingleton<ExchangeRateService>();

@@ -1,5 +1,6 @@
 using ExpensesBot.Api.Application;
 using ExpensesBot.Api.Authentication;
+using ExpensesBot.Api.Common;
 using ExpensesBot.Api.Endpoints;
 using ExpensesBot.Api.Services;
 using ExpensesBot.Data;
@@ -29,6 +30,7 @@ builder.Services
     .AddAuthentication(TelegramAuthenticationDefaults.Scheme)
     .AddScheme<AuthenticationSchemeOptions, TelegramAuthenticationHandler>(TelegramAuthenticationDefaults.Scheme, _ => { });
 builder.Services.AddAuthorization();
+builder.Services.AddApiRateLimiting(builder.Configuration);
 
 // Application services: one per feature, endpoints only translate HTTP <-> service calls.
 builder.Services.AddScoped<ExchangeRateProvider>();
@@ -77,6 +79,7 @@ app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseCors("Client");
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())

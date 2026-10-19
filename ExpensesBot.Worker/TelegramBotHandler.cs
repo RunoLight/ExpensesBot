@@ -18,7 +18,8 @@ public sealed class TelegramBotHandler(
     ILogger<TelegramBotHandler> logger,
     IHttpClientFactory httpClientFactory,
     IServiceProvider serviceProvider,
-    IConfiguration configuration)
+    IConfiguration configuration,
+    BotRateLimiter rateLimiter)
 {
     private const decimal MaxAmount = BotEntryParser.MaxAmount;
     private const string LegacyConfirmPrefix = "confirm:"; // buttons sent by older versions
@@ -49,6 +50,12 @@ public sealed class TelegramBotHandler(
 
         try
         {
+            if (!await TryPassRateLimitAsync(botToken, update, ct))
+            {
+                activity?.SetTag("bot.rate_limited", true);
+                return false;
+            }
+
             if (update["callback_query"] is JObject callbackQuery)
                 return await HandleCallbackQueryAsync(botToken, callbackQuery, ct);
 
@@ -63,6 +70,31 @@ public sealed class TelegramBotHandler(
             logger.LogError(ex, "Error processing update {UpdateId}", update["update_id"]);
             return false;
         }
+    }
+
+    /// <summary>
+    /// Drops updates from a user who sends too many. A pressed button is still
+    /// answered (so its spinner stops); the user hears why once in a while.
+    /// </summary>
+    private async Task<bool> TryPassRateLimitAsync(string botToken, JObject update, CancellationToken ct)
+    {
+        var source = update["callback_query"] ?? update["message"];
+        if (source?["from"]?["id"]?.Value<long>() is not { } telegramUserId ||
+            rateLimiter.TryAcquire(telegramUserId, out var shouldWarn))
+        {
+            return true;
+        }
+
+        logger.LogWarning("Rate limit exceeded by Telegram user {TelegramUserId}", telegramUserId);
+
+        if (update["callback_query"] is JObject callbackQuery)
+            await AnswerCallbackQueryAsync(botToken, callbackQuery["id"]?.Value<string>() ?? "", ct);
+
+        var chatId = source["chat"]?["id"]?.Value<long>() ?? source["message"]?["chat"]?["id"]?.Value<long>();
+        if (shouldWarn && chatId is { } id)
+            await SendMessageAsync(botToken, id, "⏳ Слишком много сообщений подряд — подождите немного.", null, ct);
+
+        return false;
     }
 
     private async Task<bool> HandleMessageAsync(

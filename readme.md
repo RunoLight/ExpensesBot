@@ -85,6 +85,7 @@ flowchart LR
 - **Creating a transaction is idempotent.** `POST /api/transactions` accepts an `Idempotency-Key` header. The key is stored on the transaction under a unique `(UserId, IdempotencyKey)` index: a repeated request returns the original transaction, a concurrent duplicate loses the race on the index and gets the same answer, and reusing a key for a different amount, currency, type, category or wallet is rejected with 422. The Mini App generates one key per form, so a double tap or a network retry can't record the same entry twice.
 - **Notifications go through a transactional outbox.** Nobody calls Telegram in the middle of business logic: the API and the Worker add an `OutboxMessages` row in the same `SaveChanges` as the change it is about (a wallet transaction, a reminder's `NotificationLogs` entry), so a message exists if and only if that change was committed. `OutboxDispatcher`, a separate hosted service in the Worker, delivers due messages, records each outcome right after sending, retries transient failures (network, 5xx, 429 with Telegram's `retry_after`) with exponential backoff up to 8 attempts, and drops permanent ones (bot blocked). A slow Telegram therefore never blocks the bot or an API request.
 - **Scheduled notifications are queued once.** Every reminder, weekly report and budget alert is recorded in `NotificationLogs` with a unique `(UserId, Kind, Key)` index, together with its outbox message. The Worker checks it before queueing, so restarts or a second instance never queue the same message twice.
+- **Rate limiting on both entry points.** The API uses ASP.NET Core's `AddRateLimiter` with one token bucket per user (per IP before authentication): a burst of 60 requests, because opening the Mini App fires about ten at once, refilled at 120 per minute. Over the limit it answers 429 with `Retry-After` and a problem-details body; health probes are exempt. The bot has its own per-user bucket (burst 10, 30 updates per minute): extra updates are dropped, pressed buttons are still answered so their spinner stops, and the user is told to slow down at most once a minute.
 - **Observability through OpenTelemetry.** Both services log through Serilog (readable lines in Development, compact JSON elsewhere) and export traces, metrics and logs over OTLP whenever `OTEL_EXPORTER_OTLP_ENDPOINT` is set, so any OpenTelemetry backend works and the Aspire dashboard works with no extra setup. Traces cover incoming requests, EF Core queries and outgoing HTTP; the Worker, which has no incoming requests, opens its own spans per bot update, maintenance run and outbox delivery. Custom metrics: `expensesbot.transactions.created` (by source: api, bot, recurring), `expensesbot.outbox.attempts` (by kind and outcome), `expensesbot.bot.updates`. Telegram URLs carry the bot token, so the HTTP instrumentation records them with the token masked.
 - **Health checks that mean something.** `/health` returns a JSON report for the database (EF Core) and the Telegram Bot API (`getMe`, cached for a minute). Telegram being down makes the API *Degraded*, not *Unhealthy*: the Mini App keeps working, because `initData` is verified offline. `/alive` is a dependency-free liveness probe.
 - **One SQLite file, two processes.** The API and the Worker share the database. Relative paths are resolved against the repository root so both open the same file, and both apply migrations at startup under EF Core's migration lock.
@@ -107,6 +108,7 @@ flowchart LR
 | `Telegram:InitDataMaxAgeHours` | API | `24` | How long a Mini App session stays valid. |
 | `Cors:AllowedOrigins` | API | GitHub Pages origin | Add the origin the client is served from. |
 | `ApiBaseUrl` (`Client/wwwroot/appsettings*.json`) | Client | `http://localhost:5069/` in Development | Public URL of the API for the deployed client. |
+| `RateLimiting:TokenLimit` / `RateLimiting:TokensPerMinute` | API | `60` / `120` | Per-user burst and refill rate. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | API, Worker | — | Send logs, traces and metrics to an OpenTelemetry collector (the Aspire AppHost sets it). |
 | `Serilog:MinimumLevel` | API, Worker | `Information` | Log levels, with per-namespace `Override`s. |
 | `BotUsername` (`Client/wwwroot/appsettings.json`) | Client | empty | Bot username for `t.me/<bot>?start=join_CODE` wallet invite links; without it the app shows only the code. |
@@ -160,9 +162,9 @@ dotnet test ExpensesBot.slnx
 ```
 
 - **Application service tests** exercise summary math, budget and goal progress directly against a migrated in-memory SQLite database with a fixed clock.
-- **API integration tests** run the real application (`WebApplicationFactory`) against an in-memory SQLite database created from the migrations. They cover validation, health checks, per-user isolation, idempotent creation (including concurrent duplicates), currency conversion, summary math, goals, CSV export, and authentication with correctly signed, tampered, expired and foreign `initData`.
+- **API integration tests** run the real application (`WebApplicationFactory`) against an in-memory SQLite database created from the migrations. They cover validation, health checks, rate limiting, per-user isolation, idempotent creation (including concurrent duplicates), currency conversion, summary math, goals, CSV export, and authentication with correctly signed, tampered, expired and foreign `initData`.
 - **Component tests** (bUnit) cover the summary card, history search/filter/sort, the edit and delete-account dialogs, shared form inputs, goal contributions and the help dialog.
-- **Worker and Data tests** cover recurrence scheduling, outbox delivery, retries and backoff, CBR rate parsing, bot input parsing, currency rules, and a check that the migrations match the EF model.
+- **Worker and Data tests** cover recurrence scheduling, outbox delivery, retries and backoff, the bot's rate limiter, CBR rate parsing, bot input parsing, currency rules, and a check that the migrations match the EF model.
 
 GitHub Actions runs build and tests on every push and pull request (`.github/workflows/ci.yml`); `deploy.yml` publishes the client to GitHub Pages.
 
@@ -196,7 +198,7 @@ In Development the OpenAPI document is served at `/openapi/v1.json`. `/health` (
 - [x] Idempotent transaction creation — an `Idempotency-Key` header so a double tap or a network retry never creates a duplicate
 - [x] Outbox for notifications — the API and the Worker write events to a table; a separate dispatcher delivers them to Telegram with retries
 - [x] Observability — OpenTelemetry traces and metrics, structured logging with Serilog, `/health` checking the database and Telegram (possibly via .NET Aspire)
-- [ ] Rate limiting (`AddRateLimiter`) for the API and the bot
+- [x] Rate limiting (`AddRateLimiter`) for the API and the bot
 - [ ] API versioning and Scalar UI instead of the bare `/openapi/v1.json`
 - [ ] Public demo mode — a read-only user with generated data, so the app can be explored without Telegram
 - [ ] Screenshots / GIF of the bot and the Mini App in this README

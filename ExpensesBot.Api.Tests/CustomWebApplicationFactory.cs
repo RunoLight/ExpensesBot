@@ -31,6 +31,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
     protected virtual string EnvironmentName => "Development";
 
+    /// <summary>Extra configuration for derived factories.</summary>
+    protected virtual IDictionary<string, string?> Settings => new Dictionary<string, string?>();
+
     protected override IHost CreateHost(IHostBuilder builder)
     {
         builder.UseEnvironment(EnvironmentName);
@@ -42,6 +45,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["ConnectionStrings:ExpensesDatabase"] = _connectionString,
                 ["Telegram:BotToken"] = BotToken
             });
+            config.AddInMemoryCollection(Settings);
         });
 
         // The /health Telegram check must not reach the real Bot API from tests.
