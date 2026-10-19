@@ -848,6 +848,17 @@ label,
     position: relative;
 }
 
+.filter-bar__tags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.filter-bar__tags .field-label {
+    margin: 0;
+}
+
 .filter-bar__icon {
     position: absolute;
     top: 50%;

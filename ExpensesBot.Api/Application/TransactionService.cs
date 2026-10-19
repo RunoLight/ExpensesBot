@@ -15,13 +15,19 @@ public sealed class TransactionService(ExpensesDbContext db)
     public const int MaxBulkSize = 100;
     public const string NoCategoryName = "Без категории";
 
-    public Task<List<TransactionResponse>> GetPageAsync(long userId, int limit, int offset, CancellationToken ct)
+    /// <param name="tagId">Only transactions marked with this tag, when set.</param>
+    public Task<List<TransactionResponse>> GetPageAsync(long userId, int limit, int offset, long? tagId, CancellationToken ct)
     {
+        var query = db.Transactions
+            .AsNoTracking()
+            .Where(x => x.UserId == userId);
+
+        if (tagId.HasValue)
+            query = query.Where(x => x.TransactionTags.Any(tt => tt.TagId == tagId.Value));
+
         // Order and page on the entity, then project: EF cannot translate
         // ordering by members of a record created with a constructor.
-        var page = db.Transactions
-            .AsNoTracking()
-            .Where(x => x.UserId == userId)
+        var page = query
             .OrderByDescending(x => x.OccurredAtUtc)
             .ThenByDescending(x => x.Id)
             .Skip(Math.Max(offset, 0))

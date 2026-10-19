@@ -14,8 +14,9 @@ public static class TransactionsEndpoints
             .WithTags("Transactions")
             .RequireAuthorization();
 
-        group.MapGet("/", (ClaimsPrincipal user, TransactionService service, CancellationToken ct, int limit = 50, int offset = 0) =>
-            service.GetPageAsync(user.GetUserId(), limit, offset, ct));
+        group.MapGet("/", (ClaimsPrincipal user, TransactionService service, CancellationToken ct,
+                int limit = 50, int offset = 0, long? tagId = null) =>
+            service.GetPageAsync(user.GetUserId(), limit, offset, tagId, ct));
 
         group.MapGet("/{id:long}", async (long id, ClaimsPrincipal user, TransactionService service, CancellationToken ct) =>
             (await service.GetAsync(user.GetUserId(), id, ct)).ToOk());

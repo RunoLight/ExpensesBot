@@ -2,10 +2,14 @@
                  CategoryId="categoryId"
                  SortOrder="@sortOrder"
                  Categories="Categories"
+                 Tags="Tags"
+                 SelectedTagIds="tagFilter"
                  Disabled="Saving"
                  OnSearchChanged="text => searchText = text"
                  OnCategoryChanged="id => categoryId = id"
                  OnSortChanged="order => sortOrder = order"
+                 OnTagToggled="ToggleTagFilter"
+                 OnTagsCleared="() => tagFilter.Clear()"
                  OnExport="OnExport" />
 
 <section class="history">
@@ -94,6 +98,15 @@
     private long? categoryId;
     private string sortOrder = SearchFilterBar.DefaultSort;
 
+    // Selected tags; a transaction is shown when it has at least one of them.
+    private readonly HashSet<long> tagFilter = [];
+
+    private void ToggleTagFilter(long tagId)
+    {
+        if (!tagFilter.Remove(tagId))
+            tagFilter.Add(tagId);
+    }
+
     private List<TransactionDto> FilterAndSort()
     {
         IEnumerable<TransactionDto> query = Transactions;
@@ -107,6 +120,11 @@
 
         if (categoryId.HasValue)
             query = query.Where(t => t.CategoryId == categoryId.Value);
+
+        // Tags deleted since the filter was set no longer restrict anything.
+        tagFilter.IntersectWith(Tags.Select(tag => tag.Id));
+        if (tagFilter.Count > 0)
+            query = query.Where(t => t.TransactionTags?.Any(link => tagFilter.Contains(link.TagId)) ?? false);
 
         query = sortOrder switch
         {

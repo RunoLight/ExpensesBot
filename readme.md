@@ -41,7 +41,7 @@ The Blazor client is plain Razor components and two stylesheets: no CSS framewor
 | `ProgressCard`, `ProgressBar` | Budget and goal cards with a coloured progress bar |
 | `BarRow`, `PieChart` | Breakdown charts (hand-rolled SVG, culture-invariant) |
 | `TagSelector`, `TagChip` | Tag picking and creation in the transaction form; read-only tag labels in history |
-| `TransactionList`, `SearchFilterBar` | History with client-side search, category filter and sort |
+| `TransactionList`, `SearchFilterBar` | History with client-side search, category and tag filters, and sort |
 | `EmptyState`, `ErrorBanner` | Placeholders and dismissible errors |
 
 Conventions: colours come from tokens, never inline styles except data-driven values (bar widths, tag colours via `--tag-color`); confirmations go through `IJSRuntime.ConfirmAsync`, which uses Telegram's native dialog inside the Mini App.
@@ -151,7 +151,7 @@ GitHub Actions runs build and tests on every push and pull request (`.github/wor
 
 | Method | Route | Purpose |
 |---|---|---|
-| GET/POST/PUT/DELETE | `/api/transactions[/{id}]` | Transactions (paged list, create, update, delete) |
+| GET/POST/PUT/DELETE | `/api/transactions[/{id}]` | Transactions (paged list with optional `tagId` filter, create, update, delete) |
 | POST | `/api/transactions/bulk` | Create up to 100 transactions, with per-row errors |
 | GET | `/api/transactions/summary?mode=all\|30days\|month&currency=AMD` | Totals, breakdowns, average and projection |
 | GET | `/api/transactions/export` | CSV export |
@@ -170,7 +170,7 @@ In Development the OpenAPI document is served at `/openapi/v1.json`.
 - [x] Persist notification state so restarts never resend alerts
 - [ ] Move to PostgreSQL for multi-instance deployments
 - [x] Editing budgets, goals and tags
-- [ ] Tag filters
+- [x] Tag filters
 
 ## License
 

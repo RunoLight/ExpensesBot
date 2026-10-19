@@ -142,6 +142,41 @@ public class TransactionListTests : BunitContext
     }
 
     [Fact]
+    public void TagFilter_ShowsOnlyTaggedTransactions_AndCanBeCleared()
+    {
+        var tags = new List<TagDto> { new(30, "отпуск", "#36A2EB", DateTime.UtcNow), new(31, "работа", "#FF6384", DateTime.UtcNow) };
+        var transactions = new List<TransactionDto>
+        {
+            new(1, 10_000, "AMD", 5, "Food", DateTime.UtcNow, DateTime.UtcNow, "Lunch", TransactionType.Expense, [new(1, 30)]),
+            new(2, 20_000, "AMD", 6, "Taxi", DateTime.UtcNow, DateTime.UtcNow, "Airport", TransactionType.Expense, [new(2, 31)]),
+            new(3, 30_000, "AMD", 6, "Taxi", DateTime.UtcNow, DateTime.UtcNow, "Home", TransactionType.Expense)
+        };
+
+        var cut = Render<TransactionList>(p => p
+            .Add(x => x.Transactions, transactions)
+            .Add(x => x.Categories, Categories)
+            .Add(x => x.Tags, tags));
+
+        cut.FindAll(".filter-bar__tags .tag-chip")[0].Click();
+
+        cut.FindAll(".transaction-row").Should().ContainSingle()
+            .Which.TextContent.Should().Contain("Lunch");
+
+        // A second tag widens the filter: transactions with either tag.
+        cut.FindAll(".filter-bar__tags .tag-chip")[1].Click();
+        cut.FindAll(".transaction-row").Should().HaveCount(2);
+
+        cut.Find(".filter-bar__tags button[title='Сбросить теги']").Click();
+        cut.FindAll(".transaction-row").Should().HaveCount(3);
+    }
+
+    [Fact]
+    public void WithoutTags_NoTagFilterIsShown()
+    {
+        RenderList().FindAll(".filter-bar__tags").Should().BeEmpty();
+    }
+
+    [Fact]
     public void NoMatches_ShowsNothingFound()
     {
         var cut = RenderList();

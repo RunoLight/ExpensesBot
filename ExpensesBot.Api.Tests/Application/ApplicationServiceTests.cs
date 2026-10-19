@@ -126,6 +126,34 @@ public class BudgetServiceTests : IDisposable
     public void Dispose() => _database.Dispose();
 }
 
+public class TransactionServiceTests : IDisposable
+{
+    private readonly TestDatabase _database = new();
+
+    [Fact]
+    public async Task GetPage_WithTag_ReturnsOnlyTaggedTransactions()
+    {
+        var user = await _database.AddUserAsync();
+        var vacation = new Tag { UserId = user.Id, Name = "отпуск" };
+        await _database.AddAsync(vacation);
+
+        var tagged = new Transaction { UserId = user.Id, AmountMinor = 1_000, Currency = "AMD", Note = "Hotel" };
+        tagged.TransactionTags.Add(new TransactionTag { TagId = vacation.Id });
+        await _database.AddAsync(tagged,
+            new Transaction { UserId = user.Id, AmountMinor = 2_000, Currency = "AMD", Note = "Groceries" });
+
+        await using var db = _database.CreateContext();
+        var service = new TransactionService(db);
+
+        (await service.GetPageAsync(user.Id, 50, 0, vacation.Id, default))
+            .Should().ContainSingle().Which.Note.Should().Be("Hotel");
+
+        (await service.GetPageAsync(user.Id, 50, 0, null, default)).Should().HaveCount(2);
+    }
+
+    public void Dispose() => _database.Dispose();
+}
+
 public class GoalServiceTests : IDisposable
 {
     private readonly TestDatabase _database = new();
