@@ -127,25 +127,22 @@ public class GoalEditingTests : IDisposable
     }
 
     [Fact]
-    public async Task Update_LegacyGoal_CarriesContributionsOverToTheNewName()
+    public async Task Contribute_ToAGoalWithoutCategory_GivesItANewCategory()
     {
-        // Goals created before goal categories match contributions by note.
+        // The goal's category was deleted (ON DELETE SET NULL).
         var user = await _database.AddUserAsync();
-        var goal = new Goal { UserId = user.Id, Name = "Отпуск", TargetAmountMinor = 100_000, Currency = "AMD" };
-        await _database.AddAsync(goal, new Transaction
-        {
-            UserId = user.Id,
-            AmountMinor = 40_000,
-            Currency = "AMD",
-            Type = TransactionType.Income,
-            Note = "Вклад в цель: Отпуск"
-        });
+        var goal = new Goal { UserId = user.Id, Name = "Vacation", TargetAmountMinor = 100_000, Currency = "AMD", IsActive = true };
+        await _database.AddAsync(goal);
 
         await using var db = _database.CreateContext();
-        var result = await new GoalService(db, TimeProvider.System).UpdateAsync(user.Id, goal.Id,
-            new UpdateGoalRequest("Отпуск в Грузии", 100_000, null), default);
+        var service = new GoalService(db, TimeProvider.System);
+        await service.ContributeAsync(user.Id, goal.Id, new ContributeToGoalRequest(40_000), default);
 
-        result.Value!.SavedAmountMinor.Should().Be(40_000);
+        var updated = (await service.GetAllAsync(user.Id, default)).Single();
+        updated.CategoryId.Should().NotBeNull();
+        updated.CategoryName.Should().Be("Vacation");
+        updated.SavedAmountMinor.Should().Be(40_000);
+        (await db.Transactions.SingleAsync()).Note.Should().Be("Contribution to goal: Vacation");
     }
 
     [Theory]

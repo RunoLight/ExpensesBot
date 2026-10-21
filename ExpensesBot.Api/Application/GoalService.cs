@@ -51,24 +51,12 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
             .Select(g => new { g.Key.CategoryId, g.Key.Currency, Total = g.Sum(t => t.AmountMinor) })
             .ToListAsync(ct);
 
-        // Goals created before goals had their own category are matched by the
-        // note the contribute endpoint writes.
-        var legacyNotes = goals.Where(g => g.CategoryId is null).Select(g => LegacyContributionNote(g.Name)).ToList();
-        var savedByNote = await db.Transactions
-            .Where(t => t.UserId == userId &&
-                        t.Type == TransactionType.Income &&
-                        t.Note != null &&
-                        legacyNotes.Contains(t.Note))
-            .GroupBy(t => new { t.Note, t.Currency })
-            .Select(g => new { g.Key.Note, g.Key.Currency, Total = g.Sum(t => t.AmountMinor) })
-            .ToListAsync(ct);
-
         return goals
             .Select(g =>
             {
-                var saved = g.CategoryId.HasValue
-                    ? savedByCategory.Where(x => x.CategoryId == g.CategoryId && x.Currency == g.Currency).Sum(x => x.Total)
-                    : savedByNote.Where(x => x.Note == LegacyContributionNote(g.Name) && x.Currency == g.Currency).Sum(x => x.Total);
+                // Progress is the income in the goal's category and currency; a goal whose
+                // category was deleted starts again from zero.
+                var saved = savedByCategory.Where(x => x.CategoryId == g.CategoryId && x.Currency == g.Currency).Sum(x => x.Total);
 
                 return new GoalResponse(
                     g.Id,
@@ -110,8 +98,7 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
         }
         else
         {
-            category = new Category { UserId = userId, Name = name, Icon = "🎯" };
-            db.Categories.Add(category);
+            category = NewGoalCategory(userId, name);
         }
 
         var goal = new Goal
@@ -148,27 +135,12 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
         if (Rules.ValidateAmount(request.TargetAmountMinor, "Target amount") is { } amountError)
             return amountError;
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-
-        if (goal.CategoryId is null && name != goal.Name)
-        {
-            // Goals from before goal categories find their contributions by note,
-            // so the notes have to follow the new name.
-            var oldNote = LegacyContributionNote(goal.Name);
-            var newNote = LegacyContributionNote(name);
-
-            await db.Transactions
-                .Where(t => t.UserId == userId && t.Type == TransactionType.Income && t.Note == oldNote)
-                .ExecuteUpdateAsync(s => s.SetProperty(t => t.Note, newNote), ct);
-        }
-
         goal.Name = name;
         goal.TargetAmountMinor = request.TargetAmountMinor;
         goal.TargetDateUtc = Rules.ToUtc(request.TargetDateUtc);
         goal.IsActive = request.IsActive;
 
         await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
 
         return (await GetAllAsync(userId, ct)).Single(g => g.Id == id);
     }
@@ -182,7 +154,10 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
         return deleted == 0 ? Error.NotFound() : Result.Success();
     }
 
-    /// <summary>Records a contribution as income in the goal's category.</summary>
+    /// <summary>
+    /// Records a contribution as income in the goal's category. A goal whose category
+    /// was deleted gets a new one first, so the contribution counts towards it.
+    /// </summary>
     public async Task<Result<ContributionResponse>> ContributeAsync(
         long userId,
         long goalId,
@@ -190,7 +165,6 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
         CancellationToken ct)
     {
         var goal = await db.Goals
-            .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == goalId && x.UserId == userId, ct);
 
         if (goal is null)
@@ -204,19 +178,18 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
 
         var now = clock.GetUtcNow().UtcDateTime;
 
-        // A legacy goal finds its contributions by this exact note; others get it in the user's language.
-        var note = goal.CategoryId is null
-            ? LegacyContributionNote(goal.Name)
-            : (await db.TextForAsync(userId, ct)).GoalContributionNote(goal.Name);
+        if (goal.CategoryId is null)
+            goal.Category = NewGoalCategory(userId, goal.Name);
 
         var transaction = new Transaction
         {
             UserId = userId,
             CategoryId = goal.CategoryId,
+            Category = goal.Category,
             AmountMinor = request.AmountMinor,
             Currency = goal.Currency,
             Type = TransactionType.Income,
-            Note = note,
+            Note = (await db.TextForAsync(userId, ct)).GoalContributionNote(goal.Name),
             OccurredAtUtc = now,
             CreatedAtUtc = now
         };
@@ -227,9 +200,10 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
         return new ContributionResponse(transaction.Id, request.AmountMinor);
     }
 
-    /// <summary>
-    /// The note that links contributions to goals created before goals had a category.
-    /// It is stored data, so it keeps its original (Russian) wording in every language.
-    /// </summary>
-    private static string LegacyContributionNote(string goalName) => $"Вклад в цель: {goalName}";
+    private Category NewGoalCategory(long userId, string goalName)
+    {
+        var category = new Category { UserId = userId, Name = goalName, Icon = "🎯" };
+        db.Categories.Add(category);
+        return category;
+    }
 }
