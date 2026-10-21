@@ -7,6 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Overrides Aspire's vulnerable transitive version, see Directory.Packages.props. -->
+    <PackageReference Include="MessagePack" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\ExpensesBot.Api\ExpensesBot.Api.csproj" />
     <ProjectReference Include="..\ExpensesBot.Worker\ExpensesBot.Worker.csproj" />
     <ProjectReference Include="..\ExpensesBot.Client\ExpensesBot.Client.csproj" />

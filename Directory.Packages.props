@@ -29,6 +29,12 @@
     <PackageVersion Include="Serilog.Formatting.Compact" Version="3.0.0" />
     <PackageVersion Include="Serilog.Sinks.OpenTelemetry" Version="4.2.0" />
   </ItemGroup>
+  <ItemGroup Label="Security overrides">
+    <!-- Aspire.Hosting 13.6.1 brings MessagePack 2.5.302 (GHSA-qhrr-8q5h-9q3h, DoS when
+         deserializing untrusted data as object). Referenced directly by the AppHost
+         until Aspire ships a fixed version; drop it then. -->
+    <PackageVersion Include="MessagePack" Version="2.5.307" />
+  </ItemGroup>
   <ItemGroup Label="Other">
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
