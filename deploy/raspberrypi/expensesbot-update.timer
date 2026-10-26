@@ -1,0 +1,10 @@
+[Unit]
+Description=Check GHCR for new ExpensesBot images every two minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+Unit=expensesbot-update.service
+
+[Install]
+WantedBy=timers.target

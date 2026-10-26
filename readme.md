@@ -149,10 +149,29 @@ docker compose up -d --build
 
 The API listens on `http://localhost:8080` and the Worker runs the bot; both use one SQLite database on the `expenses-data` volume. Both containers run in Production mode, so the development header is disabled.
 
+### Production: Raspberry Pi + Cloudflare Tunnel
+
+The live backend runs on a Raspberry Pi 4 (Ubuntu, arm64) at `https://expensesbot.redlightforge.com`.
+
+```mermaid
+flowchart LR
+    Dev([git push master]) --> CI[GitHub Actions<br/>build + test]
+    CI -- linux/arm64 images --> GHCR[(ghcr.io)]
+    Pi[Raspberry Pi<br/>systemd timer] -- pull every 2 min --> GHCR
+    U([Mini App]) -- HTTPS --> CF[Cloudflare edge] -- tunnel --> CFD[cloudflared on the Pi] --> API[api container<br/>127.0.0.1:8080]
+```
+
+- **CI/CD.** `ci.yml` runs the tests on every push; on `master` it then builds arm64 images on a native arm64 runner and pushes `ghcr.io/runolight/expensesbot-{api,worker}` tagged `latest` and the commit SHA. The Pi pulls new images itself (`update.sh` on `expensesbot-update.timer`), so no inbound access, deploy keys or self-hosted runner are needed — a self-hosted runner on a home device would run code from a public repository.
+- **No open ports.** The API binds to `127.0.0.1:8080`; the only way in is the Cloudflare Tunnel (`cloudflared` as a systemd service, locally managed tunnel, config in `deploy/raspberrypi/cloudflared-config.yml`).
+- **Data.** SQLite on the `expensesbot_expenses-data` volume, backed up nightly with SQLite's online `.backup` (`backup.sh`, last 14 copies in `/opt/expensesbot/backups`).
+- **Rollback.** Set `IMAGE_TAG=<commit sha>` in `/opt/expensesbot/.env` and run `sudo systemctl start expensesbot-update`.
+
+All files are in [`deploy/raspberrypi`](deploy/raspberrypi): they are copied to `/opt/expensesbot` (compose file, scripts, `.env`) and `/etc/systemd/system` (units).
+
 ### Use it from Telegram
 
 1. Create a bot with @BotFather and set the token as above.
-2. Expose the API over HTTPS (for example `cloudflared tunnel --url http://localhost:5069`) and put that URL in `Client/wwwroot/appsettings.json` → `ApiBaseUrl`.
+2. Expose the API over HTTPS (in production a Cloudflare Tunnel, see above; for a quick test `cloudflared tunnel --url http://localhost:5069`) and put that URL in `Client/wwwroot/appsettings.json` → `ApiBaseUrl`.
 3. **Run the API in Production** (`ASPNETCORE_ENVIRONMENT=Production`) whenever it is reachable from the internet.
 4. Deploy the client (the `Deploy` workflow publishes it to GitHub Pages) and register that URL with @BotFather (`/newapp` or the bot's menu button).
 5. Send `/start` to the bot.

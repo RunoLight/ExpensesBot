@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up the ExpensesBot SQLite database
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/expensesbot/backup.sh

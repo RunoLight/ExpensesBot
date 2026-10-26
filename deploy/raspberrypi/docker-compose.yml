@@ -1,0 +1,45 @@
+# Production stack on the Raspberry Pi (linux/arm64).
+# Images are built and pushed to GHCR by .github/workflows/ci.yml after the tests pass;
+# expensesbot-update.timer pulls new ones every two minutes (see update.sh).
+#
+# The API listens on 127.0.0.1:8080 only: the outside world reaches it through
+# the Cloudflare Tunnel (cloudflared on the host), never through an open port.
+
+name: expensesbot
+
+services:
+  api:
+    image: ghcr.io/runolight/expensesbot-api:${IMAGE_TAG:-latest}
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # cloudflared forwards the client address in X-Forwarded-For; the API is only
+      # reachable through it, so trusting the header is safe (rate limits per real IP).
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:?Set TELEGRAM_BOT_TOKEN in .env}
+      Cors__AllowedOrigins__0: ${CLIENT_ORIGIN:-https://runolight.github.io}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - expenses-data:/data
+    restart: unless-stopped
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  worker:
+    image: ghcr.io/runolight/expensesbot-worker:${IMAGE_TAG:-latest}
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:?Set TELEGRAM_BOT_TOKEN in .env}
+      Telegram__WebAppUrl: ${WEBAPP_URL:-https://runolight.github.io/ExpensesBot/}
+    volumes:
+      - expenses-data:/data
+    depends_on:
+      - api
+    restart: unless-stopped
+    logging: *logging
+
+volumes:
+  expenses-data:
