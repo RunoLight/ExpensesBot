@@ -43,14 +43,19 @@
 
     /* Typography */
     --font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --fs-xs: 11px;
-    --fs-sm: 12px;
-    --fs-md: 13px;
-    --fs-lg: 14px;
-    --fs-xl: 18px;
-    --fs-2xl: 19px;
-    --fs-3xl: 28px;
-    --fs-4xl: 30px;
+    /* rem, so text follows the reader's font-size setting (1rem = 16px by default) */
+    --fs-2xs: .625rem;   /* 10px: badges */
+    --fs-xs: .6875rem;   /* 11px */
+    --fs-sm: .75rem;     /* 12px */
+    --fs-md: .8125rem;   /* 13px */
+    --fs-lg: .875rem;    /* 14px */
+    --fs-base: 1rem;     /* 16px: body text and icon buttons */
+    --fs-xl: 1.125rem;   /* 18px */
+    --fs-2xl: 1.1875rem; /* 19px */
+    --fs-icon: 1.25rem;  /* 20px: emoji icons */
+    --fs-3xl: 1.75rem;   /* 28px */
+    --fs-4xl: 1.875rem;  /* 30px */
+    --fs-display: 2.125rem; /* 34px: balance, empty-state icon */
 
     /* Radius */
     --radius-sm: 6px;

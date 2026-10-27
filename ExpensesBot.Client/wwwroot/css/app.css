@@ -277,7 +277,7 @@ h2 {
     border: 1px solid var(--color-border);
     border-radius: 50%;
     background: var(--color-surface);
-    font-size: 16px;
+    font-size: var(--fs-base);
     cursor: pointer;
     transition: background var(--transition-fast);
 }
@@ -330,7 +330,7 @@ h2 {
 
 .btn-icon-textless--sm {
     padding: 0 2px;
-    font-size: 10px;
+    font-size: var(--fs-2xs);
 }
 
 .btn-icon-textless--primary {
@@ -552,7 +552,7 @@ label,
 
 .summary-card__balance-amount {
     margin: 4px 0;
-    font-size: 34px;
+    font-size: var(--fs-display);
     font-weight: 750;
     letter-spacing: -1px;
     overflow-wrap: anywhere;
@@ -842,7 +842,7 @@ label,
 
 .list-row__icon {
     flex: 0 0 28px;
-    font-size: 20px;
+    font-size: var(--fs-icon);
     text-align: center;
 }
 
@@ -893,7 +893,7 @@ label,
 }
 
 .badge small {
-    font-size: 10px;
+    font-size: var(--fs-2xs);
     opacity: .7;
 }
 
@@ -973,7 +973,7 @@ label,
     border-radius: 10px;
     background: var(--color-primary-soft);
     background: color-mix(in srgb, var(--tag-color) 18%, transparent);
-    font-size: 10px;
+    font-size: var(--fs-2xs);
     font-weight: 600;
 }
 
@@ -1047,7 +1047,7 @@ label,
     height: 44px;
     border-radius: var(--radius-2xl);
     background: var(--color-primary-soft);
-    font-size: 20px;
+    font-size: var(--fs-icon);
 }
 
 .transaction-row__info {
@@ -1106,7 +1106,7 @@ label,
 
 .empty-state__icon {
     margin-bottom: 12px;
-    font-size: 34px;
+    font-size: var(--fs-display);
 }
 
 .empty-state strong {
@@ -1250,6 +1250,26 @@ label,
 }
 
 /* === Responsive === */
+/* === Responsive ===
+   Mobile first: the base styles are for a phone in Telegram (360–430px).
+   Small phones (≤ 400px) get tighter padding and stacked form rows;
+   tablets and desktop browsers (≥ 720px) get a wider column and roomier panels. */
+
+@media (min-width: 720px) {
+    .app-shell {
+        max-width: 720px;
+        padding: 40px 24px 64px;
+    }
+
+    .panel {
+        padding: 26px;
+    }
+
+    .summary-card {
+        padding: 24px;
+    }
+}
+
 @media (max-width: 400px) {
     .app-shell {
         padding: 20px 12px 40px;
@@ -1264,7 +1284,7 @@ label,
     }
 
     .summary-card__balance-amount {
-        font-size: 28px;
+        font-size: var(--fs-3xl);
     }
 
     .summary-card__amount {
