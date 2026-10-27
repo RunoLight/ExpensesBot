@@ -67,3 +67,6 @@ data/
 
 ## Test results
 TestResults/
+
+## Personal notes and secrets (moved to a private homelab repository)
+private/
