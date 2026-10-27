@@ -3,6 +3,7 @@ using ExpensesBot.Api.Common;
 using ExpensesBot.Api.Contracts.Budgets;
 using ExpensesBot.Api.Contracts.Goals;
 using ExpensesBot.Api.Contracts.Tags;
+using ExpensesBot.Api.Contracts.Transactions;
 using ExpensesBot.Api.Tests.Infrastructure;
 using ExpensesBot.Data.Entities;
 using FluentAssertions;
@@ -221,6 +222,60 @@ public class TagEditingTests : IDisposable
 
         (await service.UpdateAsync(stranger.Id, tag.Id, new UpdateTagRequest("чужой", "#36A2EB"), default))
             .Error!.Kind.Should().Be(ErrorKind.NotFound);
+    }
+
+    public void Dispose() => _database.Dispose();
+}
+
+public class TransactionEditingTests : IDisposable
+{
+    private readonly TestDatabase _database = new();
+
+    [Fact]
+    public async Task Update_ChangesTheDateAndReplacesTheTags()
+    {
+        var user = await _database.AddUserAsync();
+        var food = new Tag { UserId = user.Id, Name = "food" };
+        var trip = new Tag { UserId = user.Id, Name = "trip" };
+        var transaction = new Transaction
+        {
+            UserId = user.Id,
+            AmountMinor = 1_000,
+            Currency = "AMD",
+            OccurredAtUtc = new DateTime(2026, 10, 20, 12, 0, 0, DateTimeKind.Utc)
+        };
+        await _database.AddAsync(food, trip, transaction);
+        await _database.AddAsync(new TransactionTag { TransactionId = transaction.Id, TagId = food.Id });
+
+        await using var db = _database.CreateContext();
+        var newDate = new DateTime(2026, 10, 3, 8, 0, 0, DateTimeKind.Utc);
+        var result = await new TransactionService(db, TimeProvider.System).UpdateAsync(user.Id, transaction.Id,
+            new UpdateTransactionRequest(1_000, "AMD", null, null, OccurredAtUtc: newDate, TagIds: [trip.Id]), default);
+
+        result.Value!.OccurredAtUtc.Should().Be(newDate);
+        result.Value.TransactionTags.Select(t => t.TagId).Should().Equal(trip.Id);
+
+        await using var check = _database.CreateContext();
+        (await check.TransactionTags.Where(tt => tt.TransactionId == transaction.Id).Select(tt => tt.TagId).ToListAsync())
+            .Should().Equal(trip.Id);
+    }
+
+    [Fact]
+    public async Task Update_WithoutDateAndTags_KeepsThem()
+    {
+        var user = await _database.AddUserAsync();
+        var tag = new Tag { UserId = user.Id, Name = "food" };
+        var date = new DateTime(2026, 10, 20, 12, 0, 0, DateTimeKind.Utc);
+        var transaction = new Transaction { UserId = user.Id, AmountMinor = 1_000, Currency = "AMD", OccurredAtUtc = date };
+        await _database.AddAsync(tag, transaction);
+        await _database.AddAsync(new TransactionTag { TransactionId = transaction.Id, TagId = tag.Id });
+
+        await using var db = _database.CreateContext();
+        var result = await new TransactionService(db, TimeProvider.System).UpdateAsync(user.Id, transaction.Id,
+            new UpdateTransactionRequest(2_000, "AMD", null, "lunch"), default);
+
+        result.Value!.OccurredAtUtc.Should().Be(date);
+        result.Value.TransactionTags.Select(t => t.TagId).Should().Equal(tag.Id);
     }
 
     public void Dispose() => _database.Dispose();

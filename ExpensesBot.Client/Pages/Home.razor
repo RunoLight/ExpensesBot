@@ -111,6 +111,7 @@
         case Dialog.Edit when editing is not null:
             <EditModal Form="editForm"
                        Categories="categories"
+                       Tags="tags"
                        Saving="saving"
                        OnSave="SaveEditAsync"
                        OnClose="CloseDialog" />
@@ -318,7 +319,8 @@
                 amountMinor, form.Currency, form.CategoryId, form.Note, form.Type,
                 selectedTagIds.Count > 0 ? selectedTagIds.ToList() : null,
                 form.WalletId,
-                form.IdempotencyKey);
+                form.IdempotencyKey,
+                form.OccurredAtUtcFor());
 
             selectedTagIds.Clear();
             form = new TransactionFormModel { Currency = form.Currency, Type = form.Type, WalletId = form.WalletId };
@@ -335,7 +337,9 @@
             Currency = transaction.Currency,
             CategoryId = transaction.CategoryId,
             Note = transaction.Note,
-            Type = transaction.Type
+            Type = transaction.Type,
+            Date = transaction.OccurredAtUtc.ToLocalTime().Date,
+            TagIds = transaction.TransactionTags?.Select(tt => tt.TagId).ToHashSet() ?? []
         };
         dialog = Dialog.Edit;
     }
@@ -348,7 +352,8 @@
         await RunAsync(async () =>
         {
             await Api.UpdateTransactionAsync(
-                original.Id, amountMinor, editForm.Currency, editForm.CategoryId, editForm.Note, editForm.Type);
+                original.Id, amountMinor, editForm.Currency, editForm.CategoryId, editForm.Note, editForm.Type,
+                editForm.OccurredAtUtcFor(original.OccurredAtUtc), editForm.TagIds);
 
             // Budgets, goals and the summary depend on transactions, so reload everything.
             CloseDialog();

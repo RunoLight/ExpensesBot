@@ -13,8 +13,16 @@
             </div>
         </div>
 
-        <label for="category">@T.Category</label>
-        <CategorySelect Id="category" Categories="Categories" @bind-Value="Form.CategoryId" />
+        <div class="form-row">
+            <div class="form-group">
+                <label for="category">@T.Category</label>
+                <CategorySelect Id="category" Categories="Categories" @bind-Value="Form.CategoryId" />
+            </div>
+            <div class="form-group">
+                <label for="date">@T.TransactionDate</label>
+                <InputDate id="date" class="form-control" @bind-Value="Form.Date" />
+            </div>
+        </div>
 
         @if (Wallets.Count > 0)
         {

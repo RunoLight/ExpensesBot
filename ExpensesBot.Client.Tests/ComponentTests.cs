@@ -251,6 +251,23 @@ public class EditModalTests : BunitContext
 
         form.Type.Should().Be(TransactionType.Income);
     }
+
+    [Fact]
+    public void DateAndTagsAreEditable()
+    {
+        var form = new TransactionFormModel { Amount = 100, Date = new DateTime(2026, 10, 20), TagIds = [1] };
+
+        var cut = Render<EditModal>(p => p
+            .Add(x => x.Form, form)
+            .Add(x => x.Tags, new List<TagDto> { new(1, "food", "#36A2EB", DateTime.UtcNow), new(2, "trip", "#FF6384", DateTime.UtcNow) }));
+
+        cut.Find("input#edit-date").Change("2026-10-03");
+        cut.FindAll(".tag-chip")[0].Click();
+        cut.FindAll(".tag-chip")[1].Click();
+
+        form.Date.Should().Be(new DateTime(2026, 10, 3));
+        form.TagIds.Should().BeEquivalentTo([2L]);
+    }
 }
 
 public class CurrencySelectTests : BunitContext

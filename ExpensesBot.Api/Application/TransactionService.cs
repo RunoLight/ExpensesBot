@@ -173,6 +173,9 @@ public sealed class TransactionService(ExpensesDbContext db, TimeProvider clock)
         if (Rules.ValidateNote(request.Note, out var note) is { } noteError)
             return noteError;
 
+        if (request.OccurredAtUtc?.Kind == DateTimeKind.Local)
+            return Error.Validation(t => t.DateNotUtc);
+
         var transaction = await db.Transactions
             .Include(x => x.TransactionTags)
             .FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct);
@@ -201,6 +204,22 @@ public sealed class TransactionService(ExpensesDbContext db, TimeProvider clock)
 
         if (request.Type.HasValue)
             transaction.Type = (EntityTransactionType)request.Type.Value;
+
+        if (request.OccurredAtUtc is { } occurredAt)
+            transaction.OccurredAtUtc = DateTime.SpecifyKind(occurredAt, DateTimeKind.Utc);
+
+        if (request.TagIds is not null)
+        {
+            var tagIds = await db.Tags
+                .Where(t => t.UserId == userId && request.TagIds.Contains(t.Id))
+                .Select(t => t.Id)
+                .ToListAsync(ct);
+
+            transaction.TransactionTags.RemoveAll(tt => !tagIds.Contains(tt.TagId));
+            transaction.TransactionTags.AddRange(tagIds
+                .Where(tagId => transaction.TransactionTags.All(tt => tt.TagId != tagId))
+                .Select(tagId => new TransactionTag { TagId = tagId }));
+        }
 
         await db.SaveChangesAsync(ct);
         return ToResponse(transaction, category?.Name);

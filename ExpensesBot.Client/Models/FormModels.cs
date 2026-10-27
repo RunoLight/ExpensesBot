@@ -9,6 +9,26 @@ public sealed class TransactionFormModel
     public string? Note { get; set; }
     public TransactionType Type { get; set; } = TransactionType.Expense;
 
+    /// <summary>Day of the transaction in the user's time zone.</summary>
+    public DateTime Date { get; set; } = DateTime.Today;
+
+    /// <summary>Tags of the transaction being edited (the new-transaction form keeps its own selection).</summary>
+    public HashSet<long> TagIds { get; init; } = [];
+
+    /// <summary>
+    /// The UTC time to send for <see cref="Date"/>, or null when the day hasn't changed:
+    /// a new entry then gets the current time from the server, an edited one keeps its time.
+    /// Another day is recorded at local noon, safely inside that day in any time zone.
+    /// </summary>
+    /// <param name="currentUtc">The edited transaction's time; null for a new one (today).</param>
+    public DateTime? OccurredAtUtcFor(DateTime? currentUtc = null)
+    {
+        var currentDay = (currentUtc?.ToLocalTime() ?? DateTime.Now).Date;
+        return Date.Date == currentDay
+            ? null
+            : DateTime.SpecifyKind(Date.Date.AddHours(12), DateTimeKind.Local).ToUniversalTime();
+    }
+
     /// <summary>Shared wallet to record into; null records a personal transaction.</summary>
     public long? WalletId { get; set; }
 

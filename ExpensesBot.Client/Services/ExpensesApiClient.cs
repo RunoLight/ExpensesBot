@@ -37,13 +37,14 @@ public sealed class ExpensesApiClient(HttpClient http)
         IEnumerable<long>? tagIds = null,
         long? walletId = null,
         string? idempotencyKey = null,
+        DateTime? occurredAtUtc = null,
         CancellationToken ct = default) =>
         SendAsync<TransactionDto>(HttpMethod.Post, "api/v1/transactions", new
         {
             AmountMinor = amountMinor,
             Currency = currency,
             CategoryId = categoryId,
-            OccurredAtUtc = (DateTime?)null,
+            OccurredAtUtc = occurredAtUtc,
             Note = note,
             Type = type,
             TagIds = tagIds?.ToList(),
@@ -57,6 +58,8 @@ public sealed class ExpensesApiClient(HttpClient http)
         long? categoryId,
         string? note,
         TransactionType? type = null,
+        DateTime? occurredAtUtc = null,
+        IEnumerable<long>? tagIds = null,
         CancellationToken ct = default) =>
         SendAsync<TransactionDto>(HttpMethod.Put, $"api/v1/transactions/{id}", new
         {
@@ -64,7 +67,9 @@ public sealed class ExpensesApiClient(HttpClient http)
             Currency = currency,
             CategoryId = categoryId,
             Note = note,
-            Type = type
+            Type = type,
+            OccurredAtUtc = occurredAtUtc,
+            TagIds = tagIds?.ToList()
         }, ct);
 
     public Task DeleteTransactionAsync(long id, CancellationToken ct = default) =>

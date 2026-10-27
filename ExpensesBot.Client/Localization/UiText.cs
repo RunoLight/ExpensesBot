@@ -99,6 +99,7 @@ public sealed class UiText
     public string Currency => Pick("Currency", "Валюта");
     public string Category => Pick("Category", "Категория");
     public string Note => Pick("Note", "Комментарий");
+    public string TransactionDate => Pick("Date", "Дата");
     public string NoCategory => Pick("No category", "Без категории");
     public string Expense => Pick("Expense", "Расход");
     public string Income => Pick("Income", "Доход");
