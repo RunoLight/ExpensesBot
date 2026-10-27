@@ -1,5 +1,5 @@
 <section class="panel">
-    <PanelHeader Title="@T.Categories" AddTitle="@T.NewCategory" FormOpen="showForm" OnToggleForm="() => showForm = !showForm">
+    <PanelHeader Title="@T.Categories" AddTitle="@T.NewCategory" FormOpen="showForm" OnToggleForm="ToggleForm">
         <button type="button" class="btn-icon @(manageMode ? "btn-icon--active" : null)" title="@T.ManageCategories" @onclick="() => manageMode = !manageMode">📋</button>
     </PanelHeader>
 
@@ -16,7 +16,7 @@
                     <InputText id="cat-icon" class="form-control" @bind-Value="form.Icon" placeholder="🛒" />
                 </div>
             </div>
-            <button class="btn btn--primary" type="submit" disabled="@Saving">@T.Add</button>
+            <button class="btn btn--primary" type="submit" disabled="@Saving">@(editingId is null ? T.Add : T.Save)</button>
         </EditForm>
     }
 
@@ -27,6 +27,7 @@
             <article class="list-row" @key="category.Id">
                 <span class="list-row__icon">@(category.Icon ?? "📁")</span>
                 <div class="list-row__body">@category.Name</div>
+                <button type="button" class="btn-icon-textless" title="@T.Rename" @onclick="() => StartEdit(category)">✏️</button>
                 @if (category.IsArchived)
                 {
                     <button type="button" class="btn-icon-textless btn-icon-textless--secondary" title="@T.Unarchive" @onclick="() => ConfirmAndArchiveAsync(category, false)">↩</button>
@@ -63,6 +64,9 @@
 
     /// <summary>Saves the category and returns true on success, so the form can reset.</summary>
     [Parameter] public Func<NewCategoryForm, Task<bool>> OnCreate { get; set; } = _ => Task.FromResult(false);
+
+    /// <summary>Saves the renamed category; true on success.</summary>
+    [Parameter] public Func<long, NewCategoryForm, Task<bool>> OnUpdate { get; set; } = (_, _) => Task.FromResult(false);
     [Parameter] public EventCallback<long> OnArchive { get; set; }
     [Parameter] public EventCallback<long> OnDelete { get; set; }
 
@@ -70,13 +74,33 @@
 
     private bool showForm;
     private bool manageMode;
+    private long? editingId;
     private NewCategoryForm form = new();
+
+    private void ToggleForm()
+    {
+        showForm = !showForm;
+        editingId = null;
+        form = new NewCategoryForm();
+    }
+
+    private void StartEdit(CategoryDto category)
+    {
+        editingId = category.Id;
+        form = NewCategoryForm.From(category);
+        showForm = true;
+    }
 
     private async Task SubmitAsync()
     {
-        if (await OnCreate(form))
+        var saved = editingId is { } id
+            ? await OnUpdate(id, form)
+            : await OnCreate(form);
+
+        if (saved)
         {
             form = new NewCategoryForm();
+            editingId = null;
             showForm = false;
         }
     }

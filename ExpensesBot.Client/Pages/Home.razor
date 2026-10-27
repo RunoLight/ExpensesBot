@@ -32,6 +32,7 @@
             <CategoryManager Categories="categories"
                              Saving="saving"
                              OnCreate="AddCategoryAsync"
+                             OnUpdate="UpdateCategoryAsync"
                              OnArchive="ArchiveCategoryAsync"
                              OnDelete="DeleteCategoryAsync" />
 
@@ -39,6 +40,7 @@
                                    Categories="categories"
                                    Saving="saving"
                                    OnCreate="AddRecurringAsync"
+                                   OnUpdate="UpdateRecurringAsync"
                                    OnExecute="ExecuteRecurringAsync"
                                    OnDelete="DeleteRecurringAsync" />
 
@@ -459,6 +461,21 @@
         }, T.ErrorCreateRecurring);
     }
 
+    private async Task<bool> UpdateRecurringAsync(long id, RecurringTransactionForm rule)
+    {
+        if (!TryGetAmount(rule.Amount, out var amountMinor))
+            return false;
+
+        return await RunAsync(async () =>
+        {
+            var updated = await Api.UpdateRecurringTransactionAsync(
+                id, amountMinor, rule.Currency, rule.CategoryId, rule.Note, rule.Pattern, rule.Type);
+            var index = recurringTransactions.FindIndex(r => r.Id == id);
+            if (index >= 0)
+                recurringTransactions[index] = updated;
+        }, T.ErrorUpdateRecurring);
+    }
+
     private Task ExecuteRecurringAsync(long id) =>
         RunAsync(async () =>
         {
@@ -486,6 +503,26 @@
         return await RunAsync(
             async () => categories.Add(await Api.CreateCategoryAsync(category.Name, category.Icon)),
             T.ErrorCreateCategory);
+    }
+
+    private async Task<bool> UpdateCategoryAsync(long id, NewCategoryForm category)
+    {
+        if (string.IsNullOrWhiteSpace(category.Name))
+        {
+            error = T.EnterCategoryName;
+            return false;
+        }
+
+        return await RunAsync(async () =>
+        {
+            var updated = await Api.UpdateCategoryAsync(id, category.Name, category.Icon);
+            var index = categories.FindIndex(c => c.Id == id);
+            if (index >= 0)
+                categories[index] = updated;
+
+            // Names shown in the history, budgets and the summary come with those items.
+            await LoadAsync();
+        }, T.ErrorUpdateCategory);
     }
 
     private Task DeleteCategoryAsync(long id) =>

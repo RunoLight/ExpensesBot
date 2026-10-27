@@ -47,12 +47,8 @@ public sealed class RecurringTransactionService(ExpensesDbContext db, TimeProvid
         if (!Enum.IsDefined(request.Type))
             return Error.Validation(t => t.UnknownTransactionType);
 
-        if (!Enum.TryParse<RecurrencePattern>(request.Pattern, ignoreCase: true, out var pattern) ||
-            !Enum.IsDefined(pattern) ||
-            pattern == RecurrencePattern.None)
-        {
+        if (!TryParsePattern(request.Pattern, out var pattern))
             return Error.Validation(t => t.UnknownPattern);
-        }
 
         if (Rules.ValidateNote(request.Note, out var note) is { } noteError)
             return noteError;
@@ -82,7 +78,7 @@ public sealed class RecurringTransactionService(ExpensesDbContext db, TimeProvid
         return ToResponse(recurring, category?.Name);
     }
 
-    /// <summary>Partial update: amount/currency only when AmountMinor &gt; 0, note only when provided.</summary>
+    /// <summary>Partial update: amount/currency only when AmountMinor &gt; 0; note, schedule and type only when provided.</summary>
     public async Task<Result<RecurringTransactionResponse>> UpdateAsync(
         long userId,
         long id,
@@ -95,6 +91,22 @@ public sealed class RecurringTransactionService(ExpensesDbContext db, TimeProvid
 
         if (recurring is null)
             return Error.NotFound();
+
+        if (request.Pattern is not null)
+        {
+            if (!TryParsePattern(request.Pattern, out var pattern))
+                return Error.Validation(t => t.UnknownPattern);
+
+            recurring.Pattern = pattern;
+        }
+
+        if (request.Type is { } type)
+        {
+            if (!Enum.IsDefined(type))
+                return Error.Validation(t => t.UnknownTransactionType);
+
+            recurring.Type = (TransactionType)type;
+        }
 
         if (request.AmountMinor > 0)
         {
@@ -131,6 +143,11 @@ public sealed class RecurringTransactionService(ExpensesDbContext db, TimeProvid
 
         return ToResponse(recurring, recurring.Category?.Name);
     }
+
+    private static bool TryParsePattern(string? value, out RecurrencePattern pattern) =>
+        Enum.TryParse(value, ignoreCase: true, out pattern) &&
+        Enum.IsDefined(pattern) &&
+        pattern != RecurrencePattern.None;
 
     public async Task<Result> DeleteAsync(long userId, long id, CancellationToken ct)
     {

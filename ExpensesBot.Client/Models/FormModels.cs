@@ -39,10 +39,13 @@ public sealed class TransactionFormModel
     public string IdempotencyKey { get; } = Guid.NewGuid().ToString();
 }
 
+/// <summary>Used both for creating a category and for renaming one.</summary>
 public sealed class NewCategoryForm
 {
     public string Name { get; set; } = string.Empty;
     public string? Icon { get; set; }
+
+    public static NewCategoryForm From(CategoryDto category) => new() { Name = category.Name, Icon = category.Icon };
 }
 
 /// <summary>Used both for creating a tag and for renaming/recolouring one.</summary>
@@ -94,6 +97,7 @@ public sealed class GoalForm
     };
 }
 
+/// <summary>Used both for creating a recurring rule and for editing one.</summary>
 public sealed class RecurringTransactionForm
 {
     public double Amount { get; set; }
@@ -102,4 +106,14 @@ public sealed class RecurringTransactionForm
     public string? Note { get; set; }
     public string Pattern { get; set; } = "Monthly";
     public TransactionType Type { get; set; } = TransactionType.Expense;
+
+    public static RecurringTransactionForm From(RecurringTransactionDto rule) => new()
+    {
+        Amount = rule.AmountMinor / 100.0,
+        CategoryId = rule.CategoryId,
+        Currency = rule.Currency,
+        Note = rule.Note,
+        Pattern = rule.Pattern,
+        Type = rule.Type
+    };
 }

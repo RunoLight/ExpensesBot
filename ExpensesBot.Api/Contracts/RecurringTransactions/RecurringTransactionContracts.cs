@@ -26,9 +26,13 @@ public sealed record CreateRecurringTransactionRequest(
     DateTime? EndsAfter,
     TransactionType Type = TransactionType.Expense);
 
+/// <param name="Pattern">New schedule, or null to keep it.</param>
+/// <param name="Type">Expense or income, or null to keep it.</param>
 public sealed record UpdateRecurringTransactionRequest(
     long AmountMinor,
     string Currency,
     long? CategoryId,
     string? Note,
-    bool IsActive);
+    bool IsActive,
+    string? Pattern = null,
+    TransactionType? Type = null);

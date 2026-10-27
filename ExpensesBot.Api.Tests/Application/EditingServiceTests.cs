@@ -2,6 +2,7 @@ using ExpensesBot.Api.Application;
 using ExpensesBot.Api.Common;
 using ExpensesBot.Api.Contracts.Budgets;
 using ExpensesBot.Api.Contracts.Goals;
+using ExpensesBot.Api.Contracts.RecurringTransactions;
 using ExpensesBot.Api.Contracts.Tags;
 using ExpensesBot.Api.Contracts.Transactions;
 using ExpensesBot.Api.Tests.Infrastructure;
@@ -276,6 +277,54 @@ public class TransactionEditingTests : IDisposable
 
         result.Value!.OccurredAtUtc.Should().Be(date);
         result.Value.TransactionTags.Select(t => t.TagId).Should().Equal(tag.Id);
+    }
+
+    public void Dispose() => _database.Dispose();
+}
+
+public class RecurringEditingTests : IDisposable
+{
+    private readonly TestDatabase _database = new();
+
+    [Fact]
+    public async Task Update_ChangesTheScheduleTypeAndAmount()
+    {
+        var user = await _database.AddUserAsync();
+        var rule = new RecurringTransaction
+        {
+            UserId = user.Id,
+            AmountMinor = 1_000,
+            Currency = "AMD",
+            Note = "Gym",
+            Pattern = RecurrencePattern.Monthly,
+            IsActive = true
+        };
+        await _database.AddAsync(rule);
+
+        await using var db = _database.CreateContext();
+        var result = await new RecurringTransactionService(db, TimeProvider.System).UpdateAsync(user.Id, rule.Id,
+            new UpdateRecurringTransactionRequest(2_500, "USD", null, "Pool", true, "weekly",
+                Contracts.Transactions.TransactionType.Income), default);
+
+        result.Value!.Pattern.Should().Be("Weekly");
+        result.Value.Type.Should().Be(Contracts.Transactions.TransactionType.Income);
+        result.Value.AmountMinor.Should().Be(2_500);
+        result.Value.Currency.Should().Be("USD");
+        result.Value.Note.Should().Be("Pool");
+    }
+
+    [Fact]
+    public async Task Update_UnknownSchedule_IsRejected()
+    {
+        var user = await _database.AddUserAsync();
+        var rule = new RecurringTransaction { UserId = user.Id, AmountMinor = 1_000, Currency = "AMD", Pattern = RecurrencePattern.Monthly, IsActive = true };
+        await _database.AddAsync(rule);
+
+        await using var db = _database.CreateContext();
+        var result = await new RecurringTransactionService(db, TimeProvider.System).UpdateAsync(user.Id, rule.Id,
+            new UpdateRecurringTransactionRequest(1_000, "AMD", null, null, true, "hourly"), default);
+
+        result.Error!.Kind.Should().Be(ErrorKind.Validation);
     }
 
     public void Dispose() => _database.Dispose();

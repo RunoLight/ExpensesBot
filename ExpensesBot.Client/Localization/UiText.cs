@@ -91,6 +91,7 @@ public sealed class UiText
     public string Save => Pick("Save", "Сохранить");
     public string Add => Pick("Add", "Добавить");
     public string Edit => Pick("Edit", "Изменить");
+    public string Rename => Pick("Rename", "Переименовать");
     public string Delete => Pick("Delete", "Удалить");
     public string Done => Pick("Done", "Готово");
     public string GotIt => Pick("Got it", "Понятно");
@@ -382,9 +383,11 @@ public sealed class UiText
     public string ErrorDeleteTransaction => Pick("Couldn't delete the transaction", "Не удалось удалить операцию");
     public string ErrorExport => Pick("Couldn't export", "Не удалось экспортировать");
     public string ErrorCreateRecurring => Pick("Couldn't create the recurring transaction", "Не удалось создать повторяющуюся операцию");
+    public string ErrorUpdateRecurring => Pick("Couldn't save the recurring transaction", "Не удалось сохранить повторяющуюся операцию");
     public string ErrorRunRecurring => Pick("Couldn't record it", "Не удалось выполнить");
     public string ErrorDelete => Pick("Couldn't delete", "Не удалось удалить");
     public string ErrorCreateCategory => Pick("Couldn't create the category", "Не удалось создать категорию");
+    public string ErrorUpdateCategory => Pick("Couldn't rename the category", "Не удалось переименовать категорию");
     public string ErrorDeleteCategory => Pick("Couldn't delete the category", "Не удалось удалить категорию");
     public string ErrorArchive => Pick("Couldn't archive", "Не удалось архивировать");
     public string ErrorCreateBudget => Pick("Couldn't create the budget", "Не удалось создать бюджет");

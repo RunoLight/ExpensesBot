@@ -17,6 +17,9 @@ public sealed class ExpensesApiClient(HttpClient http)
     public Task<CategoryDto> CreateCategoryAsync(string name, string? icon = null, CancellationToken ct = default) =>
         SendAsync<CategoryDto>(HttpMethod.Post, "api/v1/categories", new { Name = name, Icon = icon }, ct);
 
+    public Task<CategoryDto> UpdateCategoryAsync(long id, string name, string? icon, CancellationToken ct = default) =>
+        SendAsync<CategoryDto>(HttpMethod.Put, $"api/v1/categories/{id}", new { Name = name, Icon = icon }, ct);
+
     public Task DeleteCategoryAsync(long id, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Delete, $"api/v1/categories/{id}", null, ct);
 
@@ -115,6 +118,27 @@ public sealed class ExpensesApiClient(HttpClient http)
             Currency = currency,
             CategoryId = categoryId,
             Note = note,
+            Pattern = pattern,
+            Type = type
+        }, ct);
+
+    public Task<RecurringTransactionDto> UpdateRecurringTransactionAsync(
+        long id,
+        long amountMinor,
+        string currency,
+        long? categoryId,
+        string? note,
+        string pattern,
+        TransactionType type,
+        CancellationToken ct = default) =>
+        SendAsync<RecurringTransactionDto>(HttpMethod.Put, $"api/v1/recurring/{id}", new
+        {
+            AmountMinor = amountMinor,
+            Currency = currency,
+            CategoryId = categoryId,
+            // An empty note clears it; null would keep the old one.
+            Note = note ?? "",
+            IsActive = true,
             Pattern = pattern,
             Type = type
         }, ct);

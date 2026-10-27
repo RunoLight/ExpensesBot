@@ -1,5 +1,5 @@
 <section class="panel">
-    <PanelHeader Title="@T.Recurring" AddTitle="@T.NewRecurring" FormOpen="showForm" OnToggleForm="() => showForm = !showForm" />
+    <PanelHeader Title="@T.Recurring" AddTitle="@T.NewRecurring" FormOpen="showForm" OnToggleForm="ToggleForm" />
 
     @if (showForm)
     {
@@ -31,7 +31,7 @@
                 }
             </InputSelect>
 
-            <button class="btn btn--primary" type="submit" disabled="@Saving">@T.Add</button>
+            <button class="btn btn--primary" type="submit" disabled="@Saving">@(editingId is null ? T.Add : T.Save)</button>
         </EditForm>
     }
 
@@ -45,6 +45,7 @@
                 <span class="list-row__meta">@Money.FormatSigned(rule.AmountMinor, rule.Currency, rule.Type)</span>
             </div>
             <span class="badge">@T.PatternLabel(rule.Pattern)</span>
+            <button type="button" class="btn-icon-textless" title="@T.Edit" @onclick="() => StartEdit(rule)">✏️</button>
             <button type="button" class="btn-icon-textless btn-icon-textless--primary" title="@T.RunNow" @onclick="() => ConfirmAndExecuteAsync(rule.Id, name)">▶</button>
             <button type="button" class="btn-icon-textless btn-icon-textless--danger" title="@T.Delete" @onclick="() => ConfirmAndDeleteAsync(rule.Id, name)">✕</button>
         </article>
@@ -62,19 +63,42 @@
 
     /// <summary>Saves the rule and returns true on success, so the form can reset.</summary>
     [Parameter] public Func<RecurringTransactionForm, Task<bool>> OnCreate { get; set; } = _ => Task.FromResult(false);
+
+    /// <summary>Saves the edited rule; true on success.</summary>
+    [Parameter] public Func<long, RecurringTransactionForm, Task<bool>> OnUpdate { get; set; } = (_, _) => Task.FromResult(false);
     [Parameter] public EventCallback<long> OnExecute { get; set; }
     [Parameter] public EventCallback<long> OnDelete { get; set; }
 
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private bool showForm;
+    private long? editingId;
     private RecurringTransactionForm form = new();
+
+    private void ToggleForm()
+    {
+        showForm = !showForm;
+        editingId = null;
+        form = new RecurringTransactionForm { Currency = form.Currency };
+    }
+
+    private void StartEdit(RecurringTransactionDto rule)
+    {
+        editingId = rule.Id;
+        form = RecurringTransactionForm.From(rule);
+        showForm = true;
+    }
 
     private async Task SubmitAsync()
     {
-        if (await OnCreate(form))
+        var saved = editingId is { } id
+            ? await OnUpdate(id, form)
+            : await OnCreate(form);
+
+        if (saved)
         {
             form = new RecurringTransactionForm { Currency = form.Currency };
+            editingId = null;
             showForm = false;
         }
     }

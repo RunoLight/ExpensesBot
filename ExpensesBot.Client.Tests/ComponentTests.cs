@@ -370,6 +370,59 @@ public class GoalsTests : BunitContext
     }
 }
 
+public class CategoryManagerTests : BunitContext
+{
+    [Fact]
+    public void Rename_OpensTheFormWithTheCategory_AndSavesIt()
+    {
+        (long Id, string Name)? saved = null;
+        var cut = Render<CategoryManager>(p => p
+            .Add(x => x.Categories, new List<CategoryDto> { new(5, "Food", "🍔", false) })
+            .Add(x => x.OnUpdate, (long id, NewCategoryForm form) =>
+            {
+                saved = (id, form.Name);
+                return Task.FromResult(true);
+            }));
+
+        cut.Find("button[title='Manage categories']").Click();
+        cut.Find("button[title='Rename']").Click();
+        cut.Find("input#cat-name").GetAttribute("value").Should().Be("Food");
+
+        cut.Find("input#cat-name").Change("Groceries");
+        cut.Find("form").Submit();
+
+        saved.Should().Be((5L, "Groceries"));
+        cut.FindAll("form").Should().BeEmpty();
+    }
+}
+
+public class RecurringTransactionsTests : BunitContext
+{
+    [Fact]
+    public void Edit_OpensTheFormWithTheRule_AndSavesIt()
+    {
+        (long Id, RecurringTransactionForm Form)? saved = null;
+        var rule = new RecurringTransactionDto(9, 150_000, "AMD", null, null, "Rent", "Monthly", null, 0, DateTime.UtcNow, true, DateTime.UtcNow);
+        var cut = Render<RecurringTransactions>(p => p
+            .Add(x => x.Items, new List<RecurringTransactionDto> { rule })
+            .Add(x => x.OnUpdate, (long id, RecurringTransactionForm form) =>
+            {
+                saved = (id, form);
+                return Task.FromResult(true);
+            }));
+
+        cut.Find("button[title='Edit']").Click();
+        cut.Find("input#rec-amount").GetAttribute("value").Should().Be("1500");
+
+        cut.Find("select#rec-pattern").Change("Weekly");
+        cut.Find("form").Submit();
+
+        saved!.Value.Id.Should().Be(9);
+        saved.Value.Form.Pattern.Should().Be("Weekly");
+        saved.Value.Form.Note.Should().Be("Rent");
+    }
+}
+
 public class BudgetsTests : BunitContext
 {
     [Fact]
