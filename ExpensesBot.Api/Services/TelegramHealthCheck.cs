@@ -1,5 +1,5 @@
 using System.Text.Json;
-using ExpensesBot.Api.Authentication;
+using ExpensesBot.ServiceDefaults;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace ExpensesBot.Api.Services;
