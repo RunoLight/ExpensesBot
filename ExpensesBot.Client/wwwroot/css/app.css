@@ -99,21 +99,74 @@ a {
     gap: 8px;
 }
 
+.app-header__currency {
+    font-size: var(--fs-sm);
+    font-weight: 700;
+}
+
+/* === Profile === */
+.profile-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 0;
+    border-top: 1px solid var(--color-border);
+}
+
+.profile-section:first-of-type {
+    padding-top: 0;
+    border-top: 0;
+}
+
+.profile-section__title {
+    color: var(--color-text);
+    font-weight: 700;
+}
+
+.profile-section__hint {
+    margin: 0;
+    font-size: var(--fs-sm);
+}
+
+.profile-section__buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 8px;
+}
+
+.btn--outline-danger {
+    border-color: var(--color-expense);
+    color: var(--color-expense);
+}
+
+.segmented {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: var(--radius-xl);
+    background: var(--color-bg);
+}
+
+.segmented button {
+    flex: 1;
+    padding: .5rem .75rem;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-text-soft);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.segmented button.active {
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: var(--shadow-card);
+}
+
 .eyebrow {
     text-transform: uppercase;
     letter-spacing: .5px;
-}
-
-.currency-select {
-    height: 36px;
-    padding: 0 30px 0 12px;
-    border: 1px solid var(--color-border);
-    border-radius: 18px;
-    background: var(--color-surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238790a0' d='M6 8L1 3h10z'/%3E%3C/svg%3E") no-repeat right 10px center;
-    font-size: var(--fs-sm);
-    font-weight: 700;
-    cursor: pointer;
-    appearance: none;
 }
 
 /* === Panels === */
@@ -238,8 +291,12 @@ h2 {
     border-color: var(--color-primary);
 }
 
-/* Round button with a short label instead of an emoji (the RU / EN switch) */
+/* Pill-shaped button with an icon and a short label (the profile button) */
 .btn-icon--text {
+    gap: 4px;
+    width: auto;
+    padding: 0 12px;
+    border-radius: 18px;
     font-size: var(--fs-sm);
     font-weight: 600;
     color: var(--color-text);

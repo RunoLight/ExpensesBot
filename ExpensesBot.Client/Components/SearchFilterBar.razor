@@ -34,7 +34,6 @@
             }
         </div>
     }
-    <button type="button" class="btn btn--secondary" disabled="@Disabled" @onclick="OnExport">@T.ExportCsv</button>
 </section>
 
 @code {
@@ -67,5 +66,4 @@
     /// <summary>A tag chip was tapped: select it, or unselect it if it was selected.</summary>
     [Parameter] public EventCallback<long> OnTagToggled { get; set; }
     [Parameter] public EventCallback OnTagsCleared { get; set; }
-    [Parameter] public EventCallback OnExport { get; set; }
 }

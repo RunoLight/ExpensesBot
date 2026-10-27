@@ -72,17 +72,25 @@ public sealed class UiText
 
     public string AppTitle => Pick("My finances", "Мои финансы");
     public string AppEyebrow => Pick("Personal finance", "Личные финансы");
-    public string CurrencyTitle => Pick("Main currency: totals are shown and notifications are sent in it",
-        "Основная валюта: в ней показываются итоги и приходят уведомления");
     public string Help => Pick("How it works", "Как это работает");
     public string LightTheme => Pick("Light theme", "Светлая тема");
     public string DarkTheme => Pick("Dark theme", "Тёмная тема");
     public string ImportCsv => Pick("Import CSV", "Импорт CSV");
     public string DeleteAccount => Pick("Delete account", "Удалить аккаунт");
-    public string SwitchLanguage => Pick("Русский язык", "English");
 
-    /// <summary>Label of the language button: the language it switches to.</summary>
-    public string OtherLanguageCode => Pick("RU", "EN");
+    // Profile
+
+    public string Profile => Pick("Profile", "Профиль");
+    public string MainCurrency => Pick("Main currency", "Основная валюта");
+    public string MainCurrencyHint => Pick("Totals are shown in it, the bot records in it and notifications are sent in it.",
+        "В ней показываются итоги, бот записывает суммы и приходят уведомления.");
+    public string LanguageLabel => Pick("Language", "Язык");
+    public string Theme => Pick("Theme", "Тема");
+    public string YourData => Pick("Your data", "Ваши данные");
+    public string ExportCsvLabel => Pick("Export CSV", "Экспорт CSV");
+    public string DangerZone => Pick("Danger zone", "Опасная зона");
+    public string DeleteAccountHint => Pick("Deletes every transaction, category, budget, goal and tag. This can't be undone.",
+        "Удаляет все операции, категории, бюджеты, цели и теги. Отменить нельзя.");
     public string Loading => Pick("Loading…", "Загружаем данные...");
     public string LoadingShort => Pick("Loading…", "Загружаем...");
     public string NotFoundTitle => Pick("Page not found", "Страница не найдена");
@@ -260,7 +268,6 @@ public sealed class UiText
     public string TagsLabel => Pick("Tags:", "Теги:");
     public string ClearTags => Pick("Clear tags", "Сбросить теги");
     public string Clear => Pick("Clear", "Сбросить");
-    public string ExportCsv => Pick("📤 Export CSV", "📤 Экспорт CSV");
     public string NewestFirst => Pick("Newest first", "Сначала новые");
     public string OldestFirst => Pick("Oldest first", "Сначала старые");
     public string AmountDesc => Pick("Amount ↓", "По сумме ↓");

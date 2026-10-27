@@ -19,7 +19,7 @@ Built with .NET 10, ASP.NET Core Minimal APIs and EF Core.
 - **Shared wallets** — a family budget: invite people by code or `t.me/<bot>?start=join_CODE`, record transactions into the wallet, see who spent what; the other members get a message about each entry.
 - **Tags**, **CSV export and import** (the export can be re-imported).
 - **Undo** — a ↩️ button under every entry recorded from the chat, and `/undo` for the latest one.
-- **English and Russian** — a new account starts in the language of the user's Telegram app; the RU / EN button in the Mini App or `/language` in the bot switches the app, the bot and notifications together.
+- **English and Russian** — a new account starts in the language of the user's Telegram app; the language switch in the Mini App's profile or `/language` in the bot switches the app, the bot and notifications together.
 - **Notifications** — evening reminder, weekly report, budget alerts, shared-wallet entries; `/report` in chat.
 
 ## Frontend
@@ -37,7 +37,9 @@ The Blazor client is plain Razor components and two stylesheets: no CSS framewor
 
 | Component | Purpose |
 |---|---|
-| `AppHeader` | Title, display currency, help, theme, import and account actions |
+| `AppHeader` | Title, help and the profile button (showing the main currency) |
+| `ProfileModal` | Main currency, language, theme, CSV import and export, account deletion |
+| `TabBar` | History / Charts / Planning / Manage sections under the add form |
 | `HelpModal` | In-app guide: bot notifications, bot commands, currencies, recurring rules, budgets, goals |
 | `Modal` | Overlay + card with title, close button and optional action buttons |
 | `PanelHeader` | Panel title with an add/close toggle and optional extra buttons |

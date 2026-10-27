@@ -453,6 +453,45 @@ public class RecurringTransactionsTests : BunitContext
     }
 }
 
+public class ProfileTests : BunitContext
+{
+    [Fact]
+    public void Header_OnlyOpensHelpAndTheProfile()
+    {
+        var opened = false;
+        var cut = Render<AppHeader>(p => p
+            .Add(x => x.Currency, "USD")
+            .Add(x => x.OnProfile, () => opened = true));
+
+        cut.FindAll(".app-header__actions button").Should().HaveCount(2);
+        cut.Find("button[aria-label='Profile']").TextContent.Should().Contain("USD");
+        cut.Find("button[aria-label='Profile']").Click();
+
+        opened.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Profile_HoldsCurrencyDataAndAccountDeletion()
+    {
+        string? currency = null;
+        var exported = false;
+        var deleteRequested = false;
+        var cut = Render<ProfileModal>(p => p
+            .Add(x => x.Currency, "AMD")
+            .Add(x => x.OnCurrencyChanged, (string value) => currency = value)
+            .Add(x => x.OnExport, () => exported = true)
+            .Add(x => x.OnDeleteAccount, () => deleteRequested = true));
+
+        cut.Find("select#profile-currency").Change("USD");
+        cut.Find("button:contains('Export CSV')").Click();
+        cut.Find("button:contains('Delete account')").Click();
+
+        currency.Should().Be("USD");
+        exported.Should().BeTrue();
+        deleteRequested.Should().BeTrue();
+    }
+}
+
 public class BudgetsTests : BunitContext
 {
     [Fact]
@@ -632,17 +671,18 @@ public class LanguageTests : BunitContext
     }
 
     [Fact]
-    public void Header_SwitchButton_OffersTheOtherLanguage()
+    public void Profile_LanguageButtons_PickTheOtherLanguage()
     {
-        var toggled = false;
-        var cut = Render<AppHeader>(p => p
+        string? picked = null;
+        var cut = Render<ProfileModal>(p => p
             .AddCascadingValue(UiText.Ru)
-            .Add(x => x.OnToggleLanguage, () => toggled = true));
+            .Add(x => x.OnLanguageChanged, (string language) => picked = language));
 
-        var button = cut.Find("button[title='English']");
-        button.TextContent.Should().Be("EN");
-        button.Click();
+        cut.Find(".segmented button.active").TextContent.Should().Be("Русский");
+        cut.FindAll(".segmented button")[1].Click();
+        picked.Should().BeNull("the current language is already selected");
 
-        toggled.Should().BeTrue();
+        cut.FindAll(".segmented button")[0].Click();
+        picked.Should().Be("en");
     }
 }

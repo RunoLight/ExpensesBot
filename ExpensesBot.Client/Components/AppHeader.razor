@@ -4,29 +4,21 @@
         <h1>@T.AppTitle</h1>
     </div>
     <div class="app-header__actions">
-        <CurrencySelect CssClass="currency-select"
-                        Title="@T.CurrencyTitle"
-                        Value="@Currency"
-                        ValueChanged="OnCurrencyChanged" />
-        <button type="button" class="btn-icon" title="@T.Help" @onclick="OnHelp">❔</button>
-        <button type="button" class="btn-icon btn-icon--text" title="@T.SwitchLanguage" @onclick="OnToggleLanguage">@T.OtherLanguageCode</button>
-        <button type="button" class="btn-icon" title="@(DarkTheme ? T.LightTheme : T.DarkTheme)" @onclick="OnToggleTheme">
-            @(DarkTheme ? "☀️" : "🌙")
+        <button type="button" class="btn-icon" title="@T.Help" aria-label="@T.Help" @onclick="OnHelp">❔</button>
+        <button type="button" class="btn-icon btn-icon--text" title="@T.Profile" aria-label="@T.Profile" @onclick="OnProfile">
+            👤 <span class="app-header__currency">@Currency</span>
         </button>
-        <button type="button" class="btn-icon" title="@T.ImportCsv" @onclick="OnImport">📥</button>
-        <button type="button" class="btn-icon" title="@T.DeleteAccount" @onclick="OnDeleteAccount">🗑️</button>
     </div>
 </header>
 
 @code {
     [CascadingParameter] public UiText T { get; set; } = UiText.En;
-    [Parameter] public string Currency { get; set; } = "AMD";
-    [Parameter] public bool DarkTheme { get; set; }
 
-    [Parameter] public EventCallback<string> OnCurrencyChanged { get; set; }
+    /// <summary>The main currency, shown on the profile button.</summary>
+    [Parameter] public string Currency { get; set; } = "AMD";
+
     [Parameter] public EventCallback OnHelp { get; set; }
-    [Parameter] public EventCallback OnToggleLanguage { get; set; }
-    [Parameter] public EventCallback OnToggleTheme { get; set; }
-    [Parameter] public EventCallback OnImport { get; set; }
-    [Parameter] public EventCallback OnDeleteAccount { get; set; }
+
+    /// <summary>Opens the profile: currency, language, theme, import/export, account deletion.</summary>
+    [Parameter] public EventCallback OnProfile { get; set; }
 }

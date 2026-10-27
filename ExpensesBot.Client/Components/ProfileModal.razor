@@ -1,0 +1,64 @@
+<Modal Title="@T.Profile" OnClose="OnClose">
+    <section class="profile-section">
+        <label for="profile-currency" class="profile-section__title">@T.MainCurrency</label>
+        <CurrencySelect Id="profile-currency" Value="@Currency" ValueChanged="OnCurrencyChanged" />
+        <p class="muted profile-section__hint">@T.MainCurrencyHint</p>
+    </section>
+
+    <section class="profile-section">
+        <span class="profile-section__title">@T.LanguageLabel</span>
+        <div class="segmented" role="group" aria-label="@T.LanguageLabel">
+            <button type="button" class="@(T.IsRussian ? null : "active")" aria-pressed="@(T.IsRussian ? "false" : "true")"
+                    @onclick="() => SetLanguageAsync(UiText.English)">English</button>
+            <button type="button" class="@(T.IsRussian ? "active" : null)" aria-pressed="@(T.IsRussian ? "true" : "false")"
+                    @onclick="() => SetLanguageAsync(UiText.Russian)">Русский</button>
+        </div>
+    </section>
+
+    <section class="profile-section">
+        <span class="profile-section__title">@T.Theme</span>
+        <div class="segmented" role="group" aria-label="@T.Theme">
+            <button type="button" class="@(DarkTheme ? null : "active")" aria-pressed="@(DarkTheme ? "false" : "true")"
+                    @onclick="() => SetThemeAsync(dark: false)">☀️ @T.LightTheme</button>
+            <button type="button" class="@(DarkTheme ? "active" : null)" aria-pressed="@(DarkTheme ? "true" : "false")"
+                    @onclick="() => SetThemeAsync(dark: true)">🌙 @T.DarkTheme</button>
+        </div>
+    </section>
+
+    <section class="profile-section">
+        <span class="profile-section__title">@T.YourData</span>
+        <div class="profile-section__buttons">
+            <button type="button" class="btn btn--secondary" @onclick="OnImport">📥 @T.ImportCsv</button>
+            <button type="button" class="btn btn--secondary" disabled="@Saving" @onclick="OnExport">📤 @T.ExportCsvLabel</button>
+        </div>
+    </section>
+
+    <section class="profile-section profile-section--danger">
+        <span class="profile-section__title">@T.DangerZone</span>
+        <p class="muted profile-section__hint">@T.DeleteAccountHint</p>
+        <button type="button" class="btn btn--secondary btn--outline-danger" @onclick="OnDeleteAccount">@T.DeleteAccount</button>
+    </section>
+</Modal>
+
+@code {
+    [CascadingParameter] public UiText T { get; set; } = UiText.En;
+    [Parameter] public string Currency { get; set; } = "AMD";
+    [Parameter] public bool DarkTheme { get; set; }
+    [Parameter] public bool Saving { get; set; }
+
+    [Parameter] public EventCallback<string> OnCurrencyChanged { get; set; }
+
+    /// <summary>Raised with "en" or "ru" when the user picks the other language.</summary>
+    [Parameter] public EventCallback<string> OnLanguageChanged { get; set; }
+    [Parameter] public EventCallback OnToggleTheme { get; set; }
+    [Parameter] public EventCallback OnImport { get; set; }
+    [Parameter] public EventCallback OnExport { get; set; }
+    [Parameter] public EventCallback OnDeleteAccount { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Task SetLanguageAsync(string language) =>
+        language == T.Language ? Task.CompletedTask : OnLanguageChanged.InvokeAsync(language);
+
+    private Task SetThemeAsync(bool dark) =>
+        dark == DarkTheme ? Task.CompletedTask : OnToggleTheme.InvokeAsync();
+}

@@ -6,13 +6,8 @@
 <div class="expenses-app @(darkTheme ? "dark" : null)">
     <div class="app-shell">
         <AppHeader Currency="@currency"
-                   DarkTheme="darkTheme"
-                   OnCurrencyChanged="ChangeCurrencyAsync"
                    OnHelp="() => dialog = Dialog.Help"
-                   OnToggleLanguage="ToggleLanguageAsync"
-                   OnToggleTheme="ToggleThemeAsync"
-                   OnImport="() => dialog = Dialog.Import"
-                   OnDeleteAccount="() => dialog = Dialog.DeleteAccount" />
+                   OnProfile="() => dialog = Dialog.Profile" />
 
         @if (!string.IsNullOrWhiteSpace(error))
         {
@@ -117,7 +112,6 @@
                                      SelectedCurrency="@currency"
                                      Saving="saving"
                                      OnRefresh="RefreshAsync"
-                                     OnExport="ExportCsvAsync"
                                      OnEdit="OpenEdit"
                                      OnDelete="DeleteTransactionAsync" />
                     break;
@@ -129,6 +123,19 @@
     {
         case Dialog.Help:
             <HelpModal OnClose="CloseDialog" />
+            break;
+
+        case Dialog.Profile:
+            <ProfileModal Currency="@currency"
+                          DarkTheme="darkTheme"
+                          Saving="saving"
+                          OnCurrencyChanged="ChangeCurrencyAsync"
+                          OnLanguageChanged="ChangeLanguageAsync"
+                          OnToggleTheme="ToggleThemeAsync"
+                          OnImport="() => dialog = Dialog.Import"
+                          OnExport="ExportCsvAsync"
+                          OnDeleteAccount="() => dialog = Dialog.DeleteAccount"
+                          OnClose="CloseDialog" />
             break;
 
         case Dialog.Import:
@@ -159,7 +166,7 @@
     private const string TabPlanning = "planning";
     private const string TabManage = "manage";
 
-    private enum Dialog { None, Help, Import, DeleteAccount, Edit }
+    private enum Dialog { None, Help, Profile, Import, DeleteAccount, Edit }
 
     [CascadingParameter] public UiText T { get; set; } = UiText.En;
 
@@ -437,16 +444,12 @@
         }, T.ErrorChangeCurrency);
 
     /// <summary>The language is saved in the profile: the bot and notifications use it too.</summary>
-    private Task ToggleLanguageAsync()
-    {
-        var language = T.IsRussian ? UiText.English : UiText.Russian;
-
-        return RunAsync(async () =>
+    private Task ChangeLanguageAsync(string language) =>
+        RunAsync(async () =>
         {
             await Api.SetLanguageAsync(language);
             Language.Set(language);
         }, T.ErrorChangeLanguage);
-    }
 
     private void CloseDialog()
     {

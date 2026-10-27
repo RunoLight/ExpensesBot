@@ -9,8 +9,7 @@
                  OnCategoryChanged="id => ApplyAsync(Filter with { CategoryId = id })"
                  OnSortChanged="order => ApplyAsync(Filter with { Sort = order })"
                  OnTagToggled="ToggleTagFilterAsync"
-                 OnTagsCleared="() => ApplyAsync(Filter with { TagIds = [] })"
-                 OnExport="OnExport" />
+                 OnTagsCleared="() => ApplyAsync(Filter with { TagIds = [] })" />
 
 <section class="history">
     <div class="history__heading">
@@ -108,7 +107,6 @@
     [Parameter] public bool Saving { get; set; }
 
     [Parameter] public EventCallback OnRefresh { get; set; }
-    [Parameter] public EventCallback OnExport { get; set; }
     [Parameter] public EventCallback<TransactionDto> OnEdit { get; set; }
     [Parameter] public EventCallback<long> OnDelete { get; set; }
 
