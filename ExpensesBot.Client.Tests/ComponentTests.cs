@@ -124,64 +124,59 @@ public class TransactionListTests : BunitContext
     }
 
     [Fact]
-    public void CategoryFilter_HidesOtherCategories()
+    public void CategoryFilter_AsksForThatCategory()
     {
-        var cut = RenderList();
+        HistoryFilter? requested = null;
+        var cut = RenderList(p => p.Add(x => x.OnFilterChanged, (HistoryFilter f) => requested = f));
 
         cut.FindAll(".filter-bar select")[0].Change("5");
 
-        cut.FindAll(".transaction-row").Should().ContainSingle()
-            .Which.TextContent.Should().Contain("Lunch");
+        requested.Should().Be(new HistoryFilter(CategoryId: 5));
     }
 
     [Fact]
-    public void Search_MatchesNote()
+    public void Search_AsksTheApiAfterAPauseInTyping()
     {
-        var cut = RenderList();
+        var requests = new List<HistoryFilter>();
+        var cut = RenderList(p => p.Add(x => x.OnFilterChanged, (HistoryFilter f) => requests.Add(f)));
 
+        cut.Find(".filter-bar input").Input("sa");
         cut.Find(".filter-bar input").Input("sal");
 
-        cut.FindAll(".transaction-row").Should().ContainSingle()
-            .Which.TextContent.Should().Contain("Salary");
+        cut.WaitForAssertion(() => requests.Should().ContainSingle().Which.Search.Should().Be("sal"));
     }
 
     [Fact]
-    public void Sort_ByAmountAscending_PutsSmallestFirst()
+    public void Sort_AsksForTheNewOrder()
     {
-        var cut = RenderList();
+        HistoryFilter? requested = null;
+        var cut = RenderList(p => p.Add(x => x.OnFilterChanged, (HistoryFilter f) => requested = f));
 
         cut.FindAll(".filter-bar select")[1].Change("amount-asc");
 
-        cut.FindAll(".transaction-row")[0].TextContent.Should().Contain("Lunch");
+        requested!.Sort.Should().Be("amount-asc");
     }
 
     [Fact]
-    public void TagFilter_ShowsOnlyTaggedTransactions_AndCanBeCleared()
+    public void TagFilter_AddsAndClearsTags()
     {
         var tags = new List<TagDto> { new(30, "отпуск", "#36A2EB", DateTime.UtcNow), new(31, "работа", "#FF6384", DateTime.UtcNow) };
-        var transactions = new List<TransactionDto>
-        {
-            new(1, 10_000, "AMD", 5, "Food", DateTime.UtcNow, DateTime.UtcNow, "Lunch", TransactionType.Expense, [new(1, 30)]),
-            new(2, 20_000, "AMD", 6, "Taxi", DateTime.UtcNow, DateTime.UtcNow, "Airport", TransactionType.Expense, [new(2, 31)]),
-            new(3, 30_000, "AMD", 6, "Taxi", DateTime.UtcNow, DateTime.UtcNow, "Home", TransactionType.Expense)
-        };
-
-        var cut = Render<TransactionList>(p => p
-            .Add(x => x.Transactions, transactions)
-            .Add(x => x.Categories, Categories)
-            .Add(x => x.Tags, tags));
+        HistoryFilter? requested = null;
+        var cut = RenderList(p => p
+            .Add(x => x.Tags, tags)
+            .Add(x => x.OnFilterChanged, (HistoryFilter f) => requested = f));
 
         cut.FindAll(".filter-bar__tags .tag-chip")[0].Click();
+        requested!.Tags.Should().Equal(30);
 
-        cut.FindAll(".transaction-row").Should().ContainSingle()
-            .Which.TextContent.Should().Contain("Lunch");
-
-        // A second tag widens the filter: transactions with either tag.
+        // The parent reloads with the new filter; a second tag widens it.
+        cut.Render(p => p.Add(x => x.Filter, requested));
         cut.FindAll(".filter-bar__tags .tag-chip")[1].Click();
-        cut.FindAll(".transaction-row").Should().HaveCount(2);
+        requested.Tags.Should().Equal(30, 31);
 
+        cut.Render(p => p.Add(x => x.Filter, requested));
         cut.Find(".filter-bar__tags button[title='Clear tags']").Click();
-        cut.FindAll(".transaction-row").Should().HaveCount(3);
+        requested.Tags.Should().BeEmpty();
     }
 
     [Fact]
@@ -193,11 +188,25 @@ public class TransactionListTests : BunitContext
     [Fact]
     public void NoMatches_ShowsNothingFound()
     {
-        var cut = RenderList();
-
-        cut.Find(".filter-bar input").Input("no such note");
+        var cut = Render<TransactionList>(p => p
+            .Add(x => x.Transactions, new List<TransactionDto>())
+            .Add(x => x.Filter, new HistoryFilter(Search: "no such note")));
 
         cut.Markup.Should().Contain("Nothing found");
+    }
+
+    [Fact]
+    public void ShowMore_IsOfferedWhileMorePagesExist()
+    {
+        var loadMore = 0;
+        var cut = RenderList(p => p
+            .Add(x => x.HasMore, true)
+            .Add(x => x.OnLoadMore, () => loadMore++));
+
+        cut.Find(".history__more").Click();
+
+        loadMore.Should().Be(1);
+        RenderList().FindAll(".history__more").Should().BeEmpty();
     }
 
     [Fact]

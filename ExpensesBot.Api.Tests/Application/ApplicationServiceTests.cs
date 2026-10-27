@@ -6,6 +6,7 @@ using ExpensesBot.Api.Services;
 using ExpensesBot.Api.Tests.Infrastructure;
 using ExpensesBot.Data.Entities;
 using FluentAssertions;
+using TransactionQuery = ExpensesBot.Api.Contracts.Transactions.TransactionQuery;
 
 namespace ExpensesBot.Api.Tests.Application;
 
@@ -145,10 +146,50 @@ public class TransactionServiceTests : IDisposable
         await using var db = _database.CreateContext();
         var service = new TransactionService(db, TimeProvider.System);
 
-        (await service.GetPageAsync(user.Id, 50, 0, vacation.Id, default))
+        (await service.GetPageAsync(user.Id, new TransactionQuery(TagIds: [vacation.Id]), 50, 0, default))
             .Should().ContainSingle().Which.Note.Should().Be("Hotel");
 
-        (await service.GetPageAsync(user.Id, 50, 0, null, default)).Should().HaveCount(2);
+        (await service.GetPageAsync(user.Id, new TransactionQuery(), 50, 0, default)).Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task GetPage_Search_IgnoresCaseInAnyScript_AndMatchesCategoryNames()
+    {
+        var user = await _database.AddUserAsync();
+        var transport = new Category { UserId = user.Id, Name = "Транспорт" };
+        await _database.AddAsync(transport);
+        await _database.AddAsync(
+            new Transaction { UserId = user.Id, AmountMinor = 1_000, Currency = "AMD", Note = "Утренний КОФЕ" },
+            new Transaction { UserId = user.Id, AmountMinor = 2_000, Currency = "AMD", Note = "Metro", CategoryId = transport.Id },
+            new Transaction { UserId = user.Id, AmountMinor = 3_000, Currency = "AMD", Note = "Groceries" });
+
+        await using var db = _database.CreateContext();
+        var service = new TransactionService(db, TimeProvider.System);
+
+        (await service.GetPageAsync(user.Id, new TransactionQuery(Search: "кофе"), 50, 0, default))
+            .Should().ContainSingle().Which.Note.Should().Be("Утренний КОФЕ");
+        (await service.GetPageAsync(user.Id, new TransactionQuery(Search: "транс"), 50, 0, default))
+            .Should().ContainSingle().Which.Note.Should().Be("Metro");
+    }
+
+    [Fact]
+    public async Task GetPage_FiltersByCategory_SortsAndPages()
+    {
+        var user = await _database.AddUserAsync();
+        var food = new Category { UserId = user.Id, Name = "Food" };
+        await _database.AddAsync(food);
+        await _database.AddAsync(
+            new Transaction { UserId = user.Id, AmountMinor = 3_000, Currency = "AMD", CategoryId = food.Id, Note = "c" },
+            new Transaction { UserId = user.Id, AmountMinor = 1_000, Currency = "AMD", CategoryId = food.Id, Note = "a" },
+            new Transaction { UserId = user.Id, AmountMinor = 2_000, Currency = "AMD", CategoryId = food.Id, Note = "b" },
+            new Transaction { UserId = user.Id, AmountMinor = 9_000, Currency = "AMD", Note = "other" });
+
+        await using var db = _database.CreateContext();
+        var service = new TransactionService(db, TimeProvider.System);
+        var filter = new TransactionQuery(CategoryId: food.Id, Sort: "amount-asc");
+
+        (await service.GetPageAsync(user.Id, filter, 2, 0, default)).Select(t => t.Note).Should().Equal("a", "b");
+        (await service.GetPageAsync(user.Id, filter, 2, 2, default)).Select(t => t.Note).Should().Equal("c");
     }
 
     public void Dispose() => _database.Dispose();

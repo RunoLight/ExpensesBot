@@ -21,8 +21,21 @@ public sealed class ExpensesDbContext(
     public DbSet<WalletMember> WalletMembers => Set<WalletMember>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
+    /// <summary>
+    /// Lower-cases text in SQL for any script (SQLite's own lower() only folds ASCII);
+    /// see <see cref="TextFoldingInterceptor"/>. Only usable inside LINQ queries.
+    /// </summary>
+    public static string? Fold(string? value) =>
+        throw new NotSupportedException($"{nameof(Fold)} can only be used in database queries.");
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
+        optionsBuilder.AddInterceptors(TextFoldingInterceptor.Instance);
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasDbFunction(typeof(ExpensesDbContext).GetMethod(nameof(Fold))!)
+            .HasName(TextFoldingInterceptor.FunctionName);
+
         modelBuilder.Entity<Goal>()
             .HasOne(x => x.User)
             .WithMany()

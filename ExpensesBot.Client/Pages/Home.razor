@@ -81,6 +81,11 @@
                              OnDeleteTag="DeleteTagAsync" />
 
             <TransactionList Transactions="transactions"
+                             Filter="historyFilter"
+                             HasMore="hasMoreTransactions"
+                             LoadingMore="loadingMoreTransactions"
+                             OnFilterChanged="ChangeHistoryFilterAsync"
+                             OnLoadMore="LoadMoreTransactionsAsync"
                              Categories="categories"
                              Tags="tags"
                              Wallets="wallets"
@@ -135,6 +140,10 @@
     // Data
     private List<CategoryDto> categories = [];
     private List<TransactionDto> transactions = [];
+    private HistoryFilter historyFilter = new();
+    private bool hasMoreTransactions;
+    private bool loadingMoreTransactions;
+    private int historyRequest;
     private List<RecurringTransactionDto> recurringTransactions = [];
     private List<BudgetDto> budgets = [];
     private List<GoalDto> goals = [];
@@ -202,7 +211,8 @@
         {
             // Requests are independent, so run them in parallel.
             var categoriesTask = Api.GetCategoriesAsync();
-            var transactionsTask = Api.GetTransactionsAsync();
+            var historyVersion = ++historyRequest;
+            var transactionsTask = Api.GetTransactionsAsync(historyFilter);
             var summaryVersion = ++summaryRequest;
             var summaryTask = Api.GetSummaryAsync(summaryMode, currency);
             var recurringTask = Api.GetRecurringTransactionsAsync();
@@ -216,7 +226,8 @@
                 budgetsTask, goalsTask, tagsTask, ratesTask, walletsTask);
 
             categories = categoriesTask.Result;
-            transactions = transactionsTask.Result;
+            if (historyVersion == historyRequest)
+                SetFirstPage(transactionsTask.Result);
             if (summaryVersion == summaryRequest)
                 summary = summaryTask.Result;
             recurringTransactions = recurringTask.Result;
@@ -266,6 +277,63 @@
         {
             if (request == summaryRequest)
                 summaryLoading = false;
+        }
+    }
+
+    // History
+
+    private void SetFirstPage(List<TransactionDto> page)
+    {
+        transactions = page;
+        hasMoreTransactions = page.Count == HistoryFilter.PageSize;
+    }
+
+    /// <summary>Reloads the first page; answers for a filter the user has already changed are dropped.</summary>
+    private async Task ReloadHistoryAsync()
+    {
+        var request = ++historyRequest;
+
+        try
+        {
+            var page = await Api.GetTransactionsAsync(historyFilter);
+            if (request == historyRequest)
+                SetFirstPage(page);
+        }
+        catch (Exception ex)
+        {
+            if (request == historyRequest)
+                error = T.WithReason(T.ErrorRefresh, ex);
+        }
+    }
+
+    private Task ChangeHistoryFilterAsync(HistoryFilter filter)
+    {
+        historyFilter = filter;
+        return ReloadHistoryAsync();
+    }
+
+    private async Task LoadMoreTransactionsAsync()
+    {
+        var request = historyRequest;
+        loadingMoreTransactions = true;
+
+        try
+        {
+            var page = await Api.GetTransactionsAsync(historyFilter, offset: transactions.Count);
+            if (request != historyRequest)
+                return;
+
+            // A transaction added meanwhile shifts the pages: skip what is already shown.
+            transactions = [.. transactions, .. page.Where(t => transactions.All(shown => shown.Id != t.Id))];
+            hasMoreTransactions = page.Count == HistoryFilter.PageSize;
+        }
+        catch (Exception ex)
+        {
+            error = T.WithReason(T.ErrorRefresh, ex);
+        }
+        finally
+        {
+            loadingMoreTransactions = false;
         }
     }
 

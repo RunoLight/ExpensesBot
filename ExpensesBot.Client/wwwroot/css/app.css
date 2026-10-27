@@ -894,6 +894,11 @@ label,
     margin: 0;
 }
 
+.history__more {
+    width: 100%;
+    margin-top: 12px;
+}
+
 .transaction-row {
     display: flex;
     align-items: center;

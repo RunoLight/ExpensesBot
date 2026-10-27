@@ -1,15 +1,15 @@
 <SearchFilterBar SearchText="@searchText"
-                 CategoryId="categoryId"
-                 SortOrder="@sortOrder"
+                 CategoryId="Filter.CategoryId"
+                 SortOrder="@Filter.Sort"
                  Categories="Categories"
                  Tags="Tags"
-                 SelectedTagIds="tagFilter"
+                 SelectedTagIds="Filter.Tags.ToHashSet()"
                  Disabled="Saving"
-                 OnSearchChanged="text => searchText = text"
-                 OnCategoryChanged="id => categoryId = id"
-                 OnSortChanged="order => sortOrder = order"
-                 OnTagToggled="ToggleTagFilter"
-                 OnTagsCleared="() => tagFilter.Clear()"
+                 OnSearchChanged="SearchChangedAsync"
+                 OnCategoryChanged="id => ApplyAsync(Filter with { CategoryId = id })"
+                 OnSortChanged="order => ApplyAsync(Filter with { Sort = order })"
+                 OnTagToggled="ToggleTagFilterAsync"
+                 OnTagsCleared="() => ApplyAsync(Filter with { TagIds = [] })"
                  OnExport="OnExport" />
 
 <section class="history">
@@ -18,25 +18,21 @@
         <button type="button" class="btn-icon-textless btn-icon-textless--primary" disabled="@Saving" @onclick="OnRefresh">@T.Refresh</button>
     </div>
 
-    @{
-        var visible = FilterAndSort();
-    }
-
-    @if (Transactions.Count == 0)
-    {
-        <EmptyState Icon="🧾" Title="@T.Empty">
-            <p>@T.HistoryEmpty</p>
-        </EmptyState>
-    }
-    else if (visible.Count == 0)
+    @if (Transactions.Count == 0 && Filter.IsFiltered)
     {
         <EmptyState Icon="🔍" Title="@T.NothingFound">
             <p>@T.ChangeSearch</p>
         </EmptyState>
     }
+    else if (Transactions.Count == 0)
+    {
+        <EmptyState Icon="🧾" Title="@T.Empty">
+            <p>@T.HistoryEmpty</p>
+        </EmptyState>
+    }
     else
     {
-        @foreach (var transaction in visible)
+        @foreach (var transaction in Transactions)
         {
             var name = transaction.CategoryName ?? T.NoCategory;
             var occurredAt = T.DateTime(transaction.OccurredAtUtc.ToLocalTime());
@@ -80,12 +76,28 @@
                 </div>
             </article>
         }
+
+        @if (HasMore)
+        {
+            <button type="button" class="btn btn--secondary history__more" disabled="@LoadingMore" @onclick="OnLoadMore">
+                @(LoadingMore ? T.Loading : T.ShowMore)
+            </button>
+        }
     }
 </section>
 
 @code {
     [CascadingParameter] public UiText T { get; set; } = UiText.En;
+
+    /// <summary>The pages loaded so far, already filtered and sorted by the API.</summary>
     [Parameter] public List<TransactionDto> Transactions { get; set; } = [];
+
+    /// <summary>The filter the parent loaded <see cref="Transactions"/> with.</summary>
+    [Parameter] public HistoryFilter Filter { get; set; } = new();
+
+    /// <summary>More transactions match the filter than are loaded.</summary>
+    [Parameter] public bool HasMore { get; set; }
+    [Parameter] public bool LoadingMore { get; set; }
     [Parameter] public List<CategoryDto> Categories { get; set; } = [];
     [Parameter] public List<TagDto> Tags { get; set; } = [];
 
@@ -100,52 +112,55 @@
     [Parameter] public EventCallback<TransactionDto> OnEdit { get; set; }
     [Parameter] public EventCallback<long> OnDelete { get; set; }
 
+    /// <summary>Raised with the new filter; the parent reloads the first page with it.</summary>
+    [Parameter] public EventCallback<HistoryFilter> OnFilterChanged { get; set; }
+    [Parameter] public EventCallback OnLoadMore { get; set; }
+
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
+    /// <summary>Typing waits this long for a pause before asking the API.</summary>
+    public static readonly TimeSpan SearchDelay = TimeSpan.FromMilliseconds(300);
+
     private string searchText = "";
-    private long? categoryId;
-    private string sortOrder = SearchFilterBar.DefaultSort;
+    private CancellationTokenSource? pendingSearch;
 
-    // Selected tags; a transaction is shown when it has at least one of them.
-    private readonly HashSet<long> tagFilter = [];
-
-    private void ToggleTagFilter(long tagId)
+    protected override async Task OnParametersSetAsync()
     {
-        if (!tagFilter.Remove(tagId))
-            tagFilter.Add(tagId);
+        // Tags deleted since the filter was set no longer restrict anything.
+        if (Filter.Tags.Any(id => Tags.All(tag => tag.Id != id)))
+            await ApplyAsync(Filter with { TagIds = Filter.Tags.Where(id => Tags.Any(tag => tag.Id == id)).ToList() });
     }
 
-    private List<TransactionDto> FilterAndSort()
+    private async Task SearchChangedAsync(string text)
     {
-        IEnumerable<TransactionDto> query = Transactions;
+        searchText = text;
 
-        if (!string.IsNullOrWhiteSpace(searchText))
+        pendingSearch?.Cancel();
+        pendingSearch = new CancellationTokenSource();
+        var token = pendingSearch.Token;
+
+        try
         {
-            query = query.Where(t =>
-                (t.Note?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (t.CategoryName?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false));
+            await Task.Delay(SearchDelay, token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
         }
 
-        if (categoryId.HasValue)
-            query = query.Where(t => t.CategoryId == categoryId.Value);
-
-        // Tags deleted since the filter was set no longer restrict anything.
-        tagFilter.IntersectWith(Tags.Select(tag => tag.Id));
-        if (tagFilter.Count > 0)
-            query = query.Where(t => t.TransactionTags?.Any(link => tagFilter.Contains(link.TagId)) ?? false);
-
-        query = sortOrder switch
-        {
-            "date-asc" => query.OrderBy(t => t.OccurredAtUtc).ThenBy(t => t.Id),
-            "amount-desc" => query.OrderByDescending(t => t.AmountMinor).ThenByDescending(t => t.Id),
-            "amount-asc" => query.OrderBy(t => t.AmountMinor).ThenBy(t => t.Id),
-            "name-asc" => query.OrderBy(t => t.CategoryName ?? "").ThenBy(t => t.Id),
-            "name-desc" => query.OrderByDescending(t => t.CategoryName ?? "").ThenByDescending(t => t.Id),
-            _ => query.OrderByDescending(t => t.OccurredAtUtc).ThenByDescending(t => t.Id)
-        };
-
-        return query.ToList();
+        await ApplyAsync(Filter with { Search = text });
     }
+
+    private Task ToggleTagFilterAsync(long tagId)
+    {
+        var tags = Filter.Tags.Contains(tagId)
+            ? Filter.Tags.Where(id => id != tagId).ToList()
+            : [.. Filter.Tags, tagId];
+
+        return ApplyAsync(Filter with { TagIds = tags });
+    }
+
+    private Task ApplyAsync(HistoryFilter filter) => OnFilterChanged.InvokeAsync(filter);
 
     private string? WalletName(TransactionDto transaction) =>
         transaction.WalletId is { } walletId

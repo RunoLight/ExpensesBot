@@ -227,6 +227,7 @@ public sealed class UiText
     public string HistoryEmpty => Pick("Add your first transaction with the form above or send an amount to the bot.",
         "Добавьте первую операцию в форме выше или отправьте сумму боту.");
     public string NothingFound => Pick("Nothing found", "Ничего не найдено");
+    public string ShowMore => Pick("Show more", "Показать ещё");
     public string ChangeSearch => Pick("Try different search settings.", "Попробуйте изменить параметры поиска.");
     public string SharedWallet => Pick("shared wallet", "общий кошелёк");
     public string ConfirmDeleteTransaction(string name) => Pick(

@@ -6,6 +6,16 @@ public enum TransactionType
     Income = 1
 }
 
+/// <summary>Filters and order of the transaction history; every filter is optional.</summary>
+/// <param name="Search">Case-insensitive text in the note or the category name.</param>
+/// <param name="TagIds">Transactions with at least one of these tags.</param>
+/// <param name="Sort">date-desc (default), date-asc, amount-desc, amount-asc, name-asc, name-desc.</param>
+public sealed record TransactionQuery(
+    string? Search = null,
+    long? CategoryId = null,
+    IReadOnlyCollection<long>? TagIds = null,
+    string? Sort = null);
+
 public sealed record CreateTransactionRequest(
     long AmountMinor,
     string Currency,

@@ -15,23 +15,44 @@ public sealed class TransactionService(ExpensesDbContext db, TimeProvider clock)
 {
     public const int MaxBulkSize = 100;
 
-    /// <param name="tagId">Only transactions marked with this tag, when set.</param>
-    public Task<List<TransactionResponse>> GetPageAsync(long userId, int limit, int offset, long? tagId, CancellationToken ct)
+    public const int MaxPageSize = 100;
+
+    /// <summary>One page of the history, filtered and sorted in the database.</summary>
+    public Task<List<TransactionResponse>> GetPageAsync(long userId, TransactionQuery filter, int limit, int offset, CancellationToken ct)
     {
         var query = db.Transactions
             .AsNoTracking()
             .Where(x => x.UserId == userId);
 
-        if (tagId.HasValue)
-            query = query.Where(x => x.TransactionTags.Any(tt => tt.TagId == tagId.Value));
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var search = filter.Search.Trim().ToLowerInvariant();
+            query = query.Where(x =>
+                (x.Note != null && ExpensesDbContext.Fold(x.Note)!.Contains(search)) ||
+                (x.Category != null && ExpensesDbContext.Fold(x.Category.Name)!.Contains(search)));
+        }
+
+        if (filter.CategoryId is { } categoryId)
+            query = query.Where(x => x.CategoryId == categoryId);
+
+        if (filter.TagIds is { Count: > 0 } tagIds)
+            query = query.Where(x => x.TransactionTags.Any(tt => tagIds.Contains(tt.TagId)));
 
         // Order and page on the entity, then project: EF cannot translate
         // ordering by members of a record created with a constructor.
-        var page = query
-            .OrderByDescending(x => x.OccurredAtUtc)
-            .ThenByDescending(x => x.Id)
+        IOrderedQueryable<Transaction> ordered = filter.Sort switch
+        {
+            "date-asc" => query.OrderBy(x => x.OccurredAtUtc).ThenBy(x => x.Id),
+            "amount-desc" => query.OrderByDescending(x => x.AmountMinor).ThenByDescending(x => x.Id),
+            "amount-asc" => query.OrderBy(x => x.AmountMinor).ThenBy(x => x.Id),
+            "name-asc" => query.OrderBy(x => x.Category != null ? x.Category.Name : "").ThenBy(x => x.Id),
+            "name-desc" => query.OrderByDescending(x => x.Category != null ? x.Category.Name : "").ThenByDescending(x => x.Id),
+            _ => query.OrderByDescending(x => x.OccurredAtUtc).ThenByDescending(x => x.Id)
+        };
+
+        var page = ordered
             .Skip(Math.Max(offset, 0))
-            .Take(Math.Clamp(limit, 1, 100));
+            .Take(Math.Clamp(limit, 1, MaxPageSize));
 
         return Project(page).ToListAsync(ct);
     }

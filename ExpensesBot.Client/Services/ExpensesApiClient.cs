@@ -25,8 +25,10 @@ public sealed class ExpensesApiClient(HttpClient http)
 
     // Transactions
 
-    public async Task<List<TransactionDto>> GetTransactionsAsync(CancellationToken ct = default) =>
-        await GetAsync<List<TransactionDto>>("api/v1/transactions?limit=50&offset=0", ct) ?? [];
+    /// <summary>A page of the history; the API filters and sorts.</summary>
+    public async Task<List<TransactionDto>> GetTransactionsAsync(HistoryFilter filter, int offset = 0,
+        int limit = HistoryFilter.PageSize, CancellationToken ct = default) =>
+        await GetAsync<List<TransactionDto>>($"api/v1/transactions?{filter.ToQueryString()}&limit={limit}&offset={offset}", ct) ?? [];
 
     public Task<TransactionDto> CreateTransactionAsync(
         long amountMinor,
