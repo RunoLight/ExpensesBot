@@ -1298,7 +1298,7 @@ label,
 
 .loading-progress circle {
     fill: none;
-    stroke: #e0e0e0;
+    stroke: var(--color-border);
     stroke-width: .6rem;
     transform-origin: 50% 50%;
     transform: rotate(-90deg);
@@ -1319,7 +1319,7 @@ label,
 }
 
 .loading-progress-text::after {
-    content: var(--blazor-load-percentage-text, "Загрузка");
+    content: var(--blazor-load-percentage-text, "Loading");
 }
 
 #blazor-error-ui {
@@ -1330,7 +1330,8 @@ label,
     display: none;
     width: 100%;
     padding: .6rem 1.25rem .7rem;
-    background: lightyellow;
+    background: var(--color-error-bg);
+    color: var(--color-error-text);
     box-shadow: 0 -1px 2px rgba(0, 0, 0, .2);
 }
 
@@ -1348,26 +1349,7 @@ label,
 }
 
 .blazor-error-boundary::after {
-    content: "Произошла ошибка.";
-}
-
-@media (prefers-color-scheme: dark) {
-    body {
-        background: #1a1f2e;
-    }
-
-    .loading-progress-text {
-        color: #e0e5f0;
-    }
-
-    .loading-progress circle {
-        stroke: #3a4560;
-    }
-
-    #blazor-error-ui {
-        background: #3d1f24;
-        color: #f87171;
-    }
+    content: "An error has occurred.";
 }
 
 /* Shared wallets */

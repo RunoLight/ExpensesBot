@@ -13,6 +13,10 @@ public sealed class TelegramService(IJSRuntime js)
     public ValueTask<bool> IsDarkThemeAsync() =>
         js.InvokeAsync<bool>("telegramApp.isDarkTheme");
 
+    /// <summary>Applies the theme to the page itself, outside the app container.</summary>
+    public ValueTask ApplyThemeAsync(bool dark) =>
+        js.InvokeVoidAsync("telegramApp.applyTheme", dark);
+
     /// <summary>The user's Telegram interface language ("en", "ru", …); null outside Telegram.</summary>
     public ValueTask<string?> GetLanguageCodeAsync() =>
         js.InvokeAsync<string?>("telegramApp.getLanguageCode");

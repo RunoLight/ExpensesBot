@@ -897,19 +897,19 @@
         await TryJsAsync(async () => saved = await JS.InvokeAsync<string?>("localStorage.getItem", ThemeStorageKey));
 
         if (saved is "dark" or "light")
-        {
             darkTheme = saved == "dark";
-            return;
-        }
+        else
+            // No explicit choice yet: follow the Telegram colour scheme.
+            await TryJsAsync(async () => darkTheme = await Telegram.IsDarkThemeAsync());
 
-        // No explicit choice yet: follow the Telegram colour scheme.
-        await TryJsAsync(async () => darkTheme = await Telegram.IsDarkThemeAsync());
+        await TryJsAsync(async () => await Telegram.ApplyThemeAsync(darkTheme));
     }
 
     private async Task ToggleThemeAsync()
     {
         darkTheme = !darkTheme;
         await TryJsAsync(async () => await JS.InvokeVoidAsync("localStorage.setItem", ThemeStorageKey, darkTheme ? "dark" : "light"));
+        await TryJsAsync(async () => await Telegram.ApplyThemeAsync(darkTheme));
     }
 
     /// <summary>

@@ -28,6 +28,22 @@ window.telegramApp = {
         return window.Telegram?.WebApp?.colorScheme === "dark";
     },
 
+    // Same rule as Home.LoadThemeAsync: an explicit choice wins, otherwise follow Telegram.
+    initialDarkTheme: function () {
+        let saved = null;
+        try {
+            saved = localStorage.getItem("expensesTheme");
+        } catch {
+            // Storage can be unavailable (private mode, blocked site data).
+        }
+        return saved ? saved === "dark" : this.isDarkTheme();
+    },
+
+    // Keeps the page background (outside the app container) in the app's theme.
+    applyTheme: function (dark) {
+        document.documentElement.classList.toggle("dark", !!dark);
+    },
+
     confirm: function (message) {
         const webApp = window.Telegram?.WebApp;
         // Native dialogs exist since Bot API 6.2; outside Telegram initData is empty.
