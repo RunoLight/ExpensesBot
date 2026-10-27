@@ -108,7 +108,7 @@
             break;
 
         case Dialog.Import:
-            <ImportModal Categories="categories" OnClose="CloseDialog" OnImported="LoadAsync" />
+            <ImportModal Categories="categories" OnClose="CloseDialog" OnImported="ReloadTransactionDataAsync" />
             break;
 
         case Dialog.DeleteAccount:
@@ -255,6 +255,38 @@
 
     private Task RefreshAsync() => RunAsync(LoadAsync, T.ErrorRefresh);
 
+    // Targeted reloads: after a change, ask only for what it can affect.
+
+    /// <summary>
+    /// After transactions change: the history, the summary and what is computed from
+    /// transactions (budget spending, goal savings). Categories, tags, wallets and rates stay.
+    /// </summary>
+    private Task ReloadTransactionDataAsync() =>
+        Task.WhenAll(ReloadHistoryAsync(), ReloadSummaryAsync(), ReloadBudgetsAndGoalsAsync());
+
+    private async Task ReloadBudgetsAndGoalsAsync()
+    {
+        var budgetsTask = Api.GetBudgetsAsync();
+        var goalsTask = Api.GetGoalsAsync();
+        await Task.WhenAll(budgetsTask, goalsTask);
+
+        budgets = budgetsTask.Result;
+        goals = goalsTask.Result;
+    }
+
+    private async Task ReloadRecurringAsync() =>
+        recurringTransactions = await Api.GetRecurringTransactionsAsync();
+
+    private async Task ReloadWalletsAndHistoryAsync()
+    {
+        var walletsTask = Api.GetWalletsAsync();
+        await Task.WhenAll(walletsTask, ReloadHistoryAsync());
+
+        wallets = walletsTask.Result;
+        if (form.WalletId is { } walletId && wallets.All(w => w.Id != walletId))
+            form.WalletId = null;
+    }
+
     /// <summary>
     /// Reloads only the summary. Responses for a period the user has already
     /// switched away from are dropped, so quick taps never show stale totals.
@@ -394,7 +426,7 @@
 
             selectedTagIds.Clear();
             form = new TransactionFormModel { Currency = form.Currency, Type = form.Type, WalletId = form.WalletId };
-            await LoadAsync();
+            await ReloadTransactionDataAsync();
         }, T.ErrorSaveTransaction);
     }
 
@@ -425,9 +457,8 @@
                 original.Id, amountMinor, editForm.Currency, editForm.CategoryId, editForm.Note, editForm.Type,
                 editForm.OccurredAtUtcFor(original.OccurredAtUtc), editForm.TagIds);
 
-            // Budgets, goals and the summary depend on transactions, so reload everything.
             CloseDialog();
-            await LoadAsync();
+            await ReloadTransactionDataAsync();
         }, T.ErrorUpdateTransaction);
     }
 
@@ -435,7 +466,7 @@
         RunAsync(async () =>
         {
             await Api.DeleteTransactionAsync(id);
-            await LoadAsync();
+            await ReloadTransactionDataAsync();
         }, T.ErrorDeleteTransaction);
 
     private Task ExportCsvAsync() =>
@@ -480,7 +511,7 @@
         RunAsync(async () =>
         {
             await Api.ExecuteRecurringTransactionAsync(id);
-            await LoadAsync();
+            await Task.WhenAll(ReloadTransactionDataAsync(), ReloadRecurringAsync());
         }, T.ErrorRunRecurring);
 
     private Task DeleteRecurringAsync(long id) =>
@@ -520,8 +551,8 @@
             if (index >= 0)
                 categories[index] = updated;
 
-            // Names shown in the history, budgets and the summary come with those items.
-            await LoadAsync();
+            // The history, the summary, budgets, goals and rules carry the category name.
+            await Task.WhenAll(ReloadTransactionDataAsync(), ReloadRecurringAsync());
         }, T.ErrorUpdateCategory);
     }
 
@@ -529,7 +560,10 @@
         RunAsync(async () =>
         {
             await Api.DeleteCategoryAsync(id);
-            await LoadAsync();
+            categories.RemoveAll(c => c.Id == id);
+
+            // Its transactions, budgets, goals and rules lose the category.
+            await Task.WhenAll(ReloadTransactionDataAsync(), ReloadRecurringAsync());
         }, T.ErrorDeleteCategory);
 
     private Task ArchiveCategoryAsync(long id) =>
@@ -651,7 +685,7 @@
         RunAsync(async () =>
         {
             await Api.ContributeToGoalAsync(contribution.GoalId, contribution.AmountMinor);
-            await LoadAsync();
+            await ReloadTransactionDataAsync();
         }, T.ErrorContribute);
 
     // Tags
@@ -762,14 +796,14 @@
         RunAsync(async () =>
         {
             await Api.LeaveWalletAsync(id);
-            await LoadAsync();
+            await ReloadWalletsAndHistoryAsync();
         }, T.ErrorLeave);
 
     private Task DeleteWalletAsync(long id) =>
         RunAsync(async () =>
         {
             await Api.DeleteWalletAsync(id);
-            await LoadAsync();
+            await ReloadWalletsAndHistoryAsync();
         }, T.ErrorDeleteWallet);
 
     /// <summary>Opens the app through t.me/your_bot/app?startapp=join_ABCD2345: joins that wallet.</summary>
