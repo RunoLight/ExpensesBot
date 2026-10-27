@@ -1,10 +1,13 @@
 
 name: Deploy ExpensesBot Client
 
+# Runs after CI has passed on master, so a failing build never reaches GitHub Pages
+# and the client goes live in the same run that publishes the matching API images.
 on:
-  push:
-    branches:
-      - master
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
   workflow_dispatch:
 
 permissions:
@@ -18,11 +21,15 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The commit CI tested, not whatever master points to now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
