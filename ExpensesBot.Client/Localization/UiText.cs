@@ -44,12 +44,17 @@ public sealed class UiText
     private static readonly string[] MonthsEn = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     private static readonly string[] MonthsRu = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
     private static readonly string[] MonthTitlesRu = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
+    private static readonly string[] MonthNamesEn = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    private static readonly string[] MonthNamesRu = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 
     /// <summary>"16 Oct" / "16 окт".</summary>
     public string DayMonth(DateTime date) => $"{date.Day} {(IsRussian ? MonthsRu : MonthsEn)[date.Month - 1]}";
 
     /// <summary>Chart label for a month: "Oct 2026" / "Окт 2026".</summary>
     public string MonthYear(int year, int month) => $"{(IsRussian ? MonthTitlesRu : MonthsEn)[month - 1]} {year}";
+
+    /// <summary>Month picker title: "October 2026" / "Октябрь 2026".</summary>
+    public string MonthTitle(DateTime month) => $"{(IsRussian ? MonthNamesRu : MonthNamesEn)[month.Month - 1]} {month.Year}";
 
     /// <summary>"16 Oct 2026" / "16.10.2026".</summary>
     public string Date(DateTime date) =>
@@ -111,6 +116,9 @@ public sealed class UiText
 
     public string Period => Pick("Period", "Период");
     public string ThisMonth => Pick("This month", "Этот месяц");
+    public string Month => Pick("Month", "Месяц");
+    public string PreviousMonth => Pick("Previous month", "Предыдущий месяц");
+    public string NextMonth => Pick("Next month", "Следующий месяц");
     public string Last30Days => Pick("30 days", "30 дней");
     public string AllTime => Pick("All time", "Всё время");
     public string AllTimeRange => Pick("all time", "за всё время");

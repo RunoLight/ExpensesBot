@@ -12,6 +12,18 @@
         }
     </div>
 
+    @if (SummaryMode == "month")
+    {
+        <div class="summary-card__month">
+            <button type="button" class="summary-card__month-step" aria-label="@T.PreviousMonth" title="@T.PreviousMonth"
+                    @onclick="() => OnMonthChanged.InvokeAsync(SelectedMonth.AddMonths(-1))">‹</button>
+            <span class="summary-card__month-title">@T.MonthTitle(SelectedMonth)</span>
+            <button type="button" class="summary-card__month-step" aria-label="@T.NextMonth" title="@T.NextMonth"
+                    disabled="@IsCurrentMonth"
+                    @onclick="() => OnMonthChanged.InvokeAsync(SelectedMonth.AddMonths(1))">›</button>
+        </div>
+    }
+
     <div class="summary-card__balance">
         <div class="summary-card__label">@T.Balance</div>
         <div class="summary-card__balance-amount @(Summary.BalanceMinor >= 0 ? "positive" : "negative")">
@@ -36,10 +48,11 @@
         <dl class="summary-card__stats">
             @switch (SummaryMode)
             {
-                case "month":
+                case "month" when IsCurrentMonth:
                     <div><dt>@T.AveragePerDay</dt><dd>@FormatStat(Summary.AveragePerDay)</dd></div>
                     <div><dt>@T.MonthlyProjection</dt><dd>@FormatStat(Summary.ProjectedMonthly)</dd></div>
                     break;
+                case "month":
                 case "30days":
                     <div><dt>@T.AveragePerDay</dt><dd>@FormatStat(Summary.AveragePerDay)</dd></div>
                     break;
@@ -61,7 +74,7 @@
 
     private (string Value, string Label)[] Periods() =>
     [
-        ("month", T.ThisMonth),
+        ("month", T.Month),
         ("30days", T.Last30Days),
         ("all", T.AllTime)
     ];
@@ -74,13 +87,21 @@
     [Parameter] public bool Loading { get; set; }
     [Parameter] public EventCallback<string> OnModeChanged { get; set; }
 
+    /// <summary>First day of the month shown in month mode; the current month when null.</summary>
+    [Parameter] public DateTime? Month { get; set; }
+    [Parameter] public EventCallback<DateTime> OnMonthChanged { get; set; }
+
     /// <summary>Overridable for tests; defaults to the device's local date.</summary>
     [Parameter] public DateTime Today { get; set; } = DateTime.Today;
 
-    /// <summary>"1 Oct – 16 Oct 2026" for the selected period.</summary>
+    private DateTime SelectedMonth => Month ?? new DateTime(Today.Year, Today.Month, 1);
+
+    private bool IsCurrentMonth => SelectedMonth.Year == Today.Year && SelectedMonth.Month == Today.Month;
+
+    /// <summary>"1 Oct – 16 Oct 2026" for the selected period; a past month is shown whole.</summary>
     private string RangeText => SummaryMode switch
     {
-        "month" => $"{T.DayMonth(new DateTime(Today.Year, Today.Month, 1))} – {T.DayMonth(Today)} {Today.Year}",
+        "month" => $"{T.DayMonth(SelectedMonth)} – {T.DayMonth(IsCurrentMonth ? Today : SelectedMonth.AddMonths(1).AddDays(-1))} {SelectedMonth.Year}",
         "30days" => $"{T.DayMonth(Today.AddDays(-30))} – {T.DayMonth(Today)} {Today.Year}",
         _ => T.AllTimeRange
     };

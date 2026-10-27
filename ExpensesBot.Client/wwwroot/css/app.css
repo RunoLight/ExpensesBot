@@ -407,6 +407,42 @@ label,
     color: var(--color-toggle-active-text);
 }
 
+.summary-card__month {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.summary-card__month-title {
+    color: #fff;
+    font-size: var(--fs-xl);
+    font-weight: 650;
+}
+
+.summary-card__month-step {
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 1px solid var(--color-toggle-border);
+    border-radius: 50%;
+    background: transparent;
+    color: #fff;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.summary-card__month-step:hover:not(:disabled) {
+    background: var(--color-toggle-hover);
+}
+
+.summary-card__month-step:disabled {
+    opacity: .35;
+    cursor: default;
+}
+
 .summary-card__balance {
     padding: 22px 0 18px;
     text-align: center;

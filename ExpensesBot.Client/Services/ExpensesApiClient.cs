@@ -87,12 +87,26 @@ public sealed class ExpensesApiClient(HttpClient http)
 
     /// <param name="mode">"all", "30days" or "month".</param>
     /// <param name="currency">Currency all totals are converted into.</param>
+    /// <param name="month">
+    /// In month mode, the first day of the month to show. Its bounds are sent in the device's
+    /// time zone, so a late-evening entry on the 31st doesn't land in the next month.
+    /// </param>
     public async Task<UserSummaryDto> GetSummaryAsync(
         string mode,
         string currency,
+        DateTime? month = null,
         CancellationToken ct = default)
     {
         var url = $"api/v1/transactions/summary?mode={Uri.EscapeDataString(mode)}&currency={Uri.EscapeDataString(currency)}";
+
+        if (mode == "month" && month is { } first)
+        {
+            var start = DateTime.SpecifyKind(new DateTime(first.Year, first.Month, 1), DateTimeKind.Local);
+            var from = start.ToUniversalTime();
+            var to = start.AddMonths(1).ToUniversalTime().AddTicks(-1);
+            url += $"&from={Uri.EscapeDataString(from.ToString("o"))}&to={Uri.EscapeDataString(to.ToString("o"))}";
+        }
+
         return await GetAsync<UserSummaryDto>(url, ct) ?? UserSummaryDto.Empty(currency);
     }
 

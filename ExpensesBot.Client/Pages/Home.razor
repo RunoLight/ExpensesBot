@@ -25,7 +25,12 @@
         }
         else
         {
-            <SummaryCard Summary="summary" SummaryMode="@summaryMode" Loading="summaryLoading" OnModeChanged="ChangeSummaryModeAsync" />
+            <SummaryCard Summary="summary"
+                         SummaryMode="@summaryMode"
+                         Month="summaryMonth"
+                         Loading="summaryLoading"
+                         OnModeChanged="ChangeSummaryModeAsync"
+                         OnMonthChanged="ChangeSummaryMonthAsync" />
 
             <CategoryBreakdown CategoryRows="summary.ByCategory" PeriodRows="summary.ByPeriod" Categories="categories" />
 
@@ -160,6 +165,7 @@
     private string? error;
     private string currency = "AMD";
     private string summaryMode = "month";
+    private DateTime summaryMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private bool summaryLoading;
     private int summaryRequest;
     private bool darkTheme;
@@ -216,7 +222,7 @@
             var historyVersion = ++historyRequest;
             var transactionsTask = Api.GetTransactionsAsync(historyFilter);
             var summaryVersion = ++summaryRequest;
-            var summaryTask = Api.GetSummaryAsync(summaryMode, currency);
+            var summaryTask = Api.GetSummaryAsync(summaryMode, currency, summaryMonth);
             var recurringTask = Api.GetRecurringTransactionsAsync();
             var budgetsTask = Api.GetBudgetsAsync();
             var goalsTask = Api.GetGoalsAsync();
@@ -298,7 +304,7 @@
 
         try
         {
-            var result = await Api.GetSummaryAsync(summaryMode, currency);
+            var result = await Api.GetSummaryAsync(summaryMode, currency, summaryMonth);
             if (request == summaryRequest)
                 summary = result;
         }
@@ -369,6 +375,12 @@
         {
             loadingMoreTransactions = false;
         }
+    }
+
+    private Task ChangeSummaryMonthAsync(DateTime month)
+    {
+        summaryMonth = month;
+        return ReloadSummaryAsync();
     }
 
     private Task ChangeSummaryModeAsync(string mode)

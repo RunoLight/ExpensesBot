@@ -128,12 +128,16 @@ public sealed class SummaryService(ExpensesDbContext db, ExchangeRateProvider ex
         long expenseMinor,
         Func<long> lastThirtyDaysExpense)
     {
-        if (usesModeRange && mode == "month")
+        if (mode == "month" && fromUtc is { } monthStart)
         {
-            // Spending so far this month, extrapolated to the whole month.
-            var elapsed = Math.Max(1.0, (now - fromUtc!.Value).TotalDays);
+            // A month the client picked (from/to in its time zone) or the current UTC month.
+            // Spending so far is extrapolated to the whole month; a past month is complete,
+            // so its "projection" is simply what was spent.
+            var monthEnd = !usesModeRange && toUtc > monthStart ? toUtc.Value : monthStart.AddMonths(1);
+            var length = Math.Max(1.0, (monthEnd - monthStart).TotalDays);
+            var elapsed = Math.Clamp((now - monthStart).TotalDays, 1.0, length);
             var average = expenseMinor / elapsed;
-            return (average, average * DateTime.DaysInMonth(now.Year, now.Month), (int)Math.Ceiling(elapsed));
+            return (average, average * length, (int)Math.Ceiling(elapsed));
         }
 
         if (fromUtc.HasValue && toUtc.HasValue && toUtc > fromUtc)

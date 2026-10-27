@@ -1,7 +1,8 @@
 @if (PeriodRows.Count > 0 || CategoryRows.Count > 0)
 {
     <section class="panel">
-        @if (PeriodRows.Count > 0)
+        @* One month has nothing to compare with. *@
+        @if (PeriodRows.Count > 1)
         {
             var periods = PeriodRows.Where(p => !string.IsNullOrEmpty(p.Period)).Take(6).ToList();
             var maxPeriod = periods.Select(p => p.TotalAmountMinor).DefaultIfEmpty(0).Max();

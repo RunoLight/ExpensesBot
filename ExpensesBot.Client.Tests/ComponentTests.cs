@@ -60,6 +60,36 @@ public class SummaryCardTests : BunitContext
     }
 
     [Fact]
+    public void PastMonth_ShowsTheWholeMonth_WithoutAProjection()
+    {
+        DateTime? picked = null;
+        var cut = Render<SummaryCard>(p => p
+            .Add(x => x.Summary, Summary())
+            .Add(x => x.SummaryMode, "month")
+            .Add(x => x.Month, new DateTime(2026, 9, 1))
+            .Add(x => x.Today, new DateTime(2026, 10, 16))
+            .Add(x => x.OnMonthChanged, (DateTime month) => picked = month));
+
+        cut.Find(".summary-card__month-title").TextContent.Should().Be("September 2026");
+        cut.Find(".summary-card__range").TextContent.Should().Contain("1 Sep – 30 Sep 2026");
+        cut.Find(".summary-card__stats").TextContent.Should().NotContain("Projected");
+
+        cut.Find("button[aria-label='Previous month']").Click();
+        picked.Should().Be(new DateTime(2026, 8, 1));
+    }
+
+    [Fact]
+    public void CurrentMonth_CannotStepIntoTheFuture()
+    {
+        var cut = Render<SummaryCard>(p => p
+            .Add(x => x.Summary, Summary())
+            .Add(x => x.SummaryMode, "month")
+            .Add(x => x.Today, new DateTime(2026, 10, 16)));
+
+        cut.Find("button[aria-label='Next month']").HasAttribute("disabled").Should().BeTrue();
+    }
+
+    [Fact]
     public void ActivePeriod_IsHighlighted()
     {
         var cut = Render<SummaryCard>(p => p

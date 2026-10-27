@@ -49,6 +49,24 @@ public class SummaryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task PickedPastMonth_CountsOnlyThatMonth_AndProjectsWhatWasSpent()
+    {
+        var user = await _database.AddUserAsync();
+        await _database.AddAsync(
+            Expense(user.Id, 300_000, new DateTime(2026, 9, 10, 0, 0, 0, DateTimeKind.Utc)),
+            Expense(user.Id, 999_999, new DateTime(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc)));
+
+        // September in UTC+4, as the Mini App sends it.
+        var from = new DateTime(2026, 8, 31, 20, 0, 0, DateTimeKind.Utc);
+        var to = new DateTime(2026, 9, 30, 20, 0, 0, DateTimeKind.Utc).AddTicks(-1);
+        var summary = await CreateService().GetAsync(user.Id, "month", "AMD", from, to, default);
+
+        summary.TotalExpenseMinor.Should().Be(300_000);
+        summary.ProjectedMonthly.Should().BeApproximately(300_000, 1);
+        summary.DaysInPeriod.Should().Be(30);
+    }
+
+    [Fact]
     public async Task OtherUsersTransactionsAreIgnored()
     {
         var user = await _database.AddUserAsync(1);
