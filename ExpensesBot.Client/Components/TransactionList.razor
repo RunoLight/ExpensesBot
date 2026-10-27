@@ -124,6 +124,9 @@
     private string searchText = "";
     private CancellationTokenSource? pendingSearch;
 
+    // The list is re-created when its tab is opened again: show the search it was left with.
+    protected override void OnInitialized() => searchText = Filter.Search;
+
     protected override async Task OnParametersSetAsync()
     {
         // Tags deleted since the filter was set no longer restrict anything.

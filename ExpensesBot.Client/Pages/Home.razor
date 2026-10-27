@@ -32,49 +32,6 @@
                          OnModeChanged="ChangeSummaryModeAsync"
                          OnMonthChanged="ChangeSummaryMonthAsync" />
 
-            <CategoryBreakdown CategoryRows="summary.ByCategory" PeriodRows="summary.ByPeriod" Categories="categories" />
-
-            <CategoryManager Categories="categories"
-                             Saving="saving"
-                             OnCreate="AddCategoryAsync"
-                             OnUpdate="UpdateCategoryAsync"
-                             OnArchive="ArchiveCategoryAsync"
-                             OnDelete="DeleteCategoryAsync" />
-
-            <RecurringTransactions Items="recurringTransactions"
-                                   Categories="categories"
-                                   Saving="saving"
-                                   OnCreate="AddRecurringAsync"
-                                   OnUpdate="UpdateRecurringAsync"
-                                   OnExecute="ExecuteRecurringAsync"
-                                   OnDelete="DeleteRecurringAsync" />
-
-            <Goals Items="goals"
-                   Categories="categories"
-                   Saving="saving"
-                   OnCreate="AddGoalAsync"
-                   OnUpdate="UpdateGoalAsync"
-                   OnContribute="ContributeToGoalAsync"
-                   OnDelete="DeleteGoalAsync" />
-
-            <Wallets Items="wallets"
-                     Saving="saving"
-                     BotUsername="@botUsername"
-                     OnCreate="CreateWalletAsync"
-                     OnJoin="JoinWalletAsync"
-                     LoadView="LoadWalletViewAsync"
-                     OnRegenerateInvite="RegenerateWalletInviteAsync"
-                     OnRemoveMember="RemoveWalletMemberAsync"
-                     OnLeave="LeaveWalletAsync"
-                     OnDelete="DeleteWalletAsync" />
-
-            <Budgets Items="budgets"
-                     Categories="categories"
-                     Saving="saving"
-                     OnCreate="AddBudgetAsync"
-                     OnUpdate="UpdateBudgetAsync"
-                     OnDelete="DeleteBudgetAsync" />
-
             <TransactionForm Form="form"
                              Categories="categories"
                              Tags="tags"
@@ -87,22 +44,84 @@
                              OnUpdateTag="UpdateTagAsync"
                              OnDeleteTag="DeleteTagAsync" />
 
-            <TransactionList Transactions="transactions"
-                             Filter="historyFilter"
-                             HasMore="hasMoreTransactions"
-                             LoadingMore="loadingMoreTransactions"
-                             OnFilterChanged="ChangeHistoryFilterAsync"
-                             OnLoadMore="LoadMoreTransactionsAsync"
+            <TabBar Items="Tabs()" Selected="@tab" Label="@T.Sections" OnSelected="value => tab = value" />
+
+            @switch (tab)
+            {
+                case TabCharts:
+                    <CategoryBreakdown CategoryRows="summary.ByCategory" PeriodRows="summary.ByPeriod" Categories="categories" />
+                    @if (summary.ByCategory.Count == 0)
+                    {
+                        <EmptyState Icon="📊" Title="@T.NoChartData">
+                            <p>@T.NoChartDataHint</p>
+                        </EmptyState>
+                    }
+                    break;
+
+                case TabPlanning:
+                    <Budgets Items="budgets"
                              Categories="categories"
-                             Tags="tags"
-                             Wallets="wallets"
-                             Rates="rates"
-                             SelectedCurrency="@currency"
                              Saving="saving"
-                             OnRefresh="RefreshAsync"
-                             OnExport="ExportCsvAsync"
-                             OnEdit="OpenEdit"
-                             OnDelete="DeleteTransactionAsync" />
+                             OnCreate="AddBudgetAsync"
+                             OnUpdate="UpdateBudgetAsync"
+                             OnDelete="DeleteBudgetAsync" />
+
+                    <Goals Items="goals"
+                           Categories="categories"
+                           Saving="saving"
+                           OnCreate="AddGoalAsync"
+                           OnUpdate="UpdateGoalAsync"
+                           OnContribute="ContributeToGoalAsync"
+                           OnDelete="DeleteGoalAsync" />
+
+                    <RecurringTransactions Items="recurringTransactions"
+                                           Categories="categories"
+                                           Saving="saving"
+                                           OnCreate="AddRecurringAsync"
+                                           OnUpdate="UpdateRecurringAsync"
+                                           OnExecute="ExecuteRecurringAsync"
+                                           OnDelete="DeleteRecurringAsync" />
+                    break;
+
+                case TabManage:
+                    <CategoryManager Categories="categories"
+                                     Saving="saving"
+                                     OnCreate="AddCategoryAsync"
+                                     OnUpdate="UpdateCategoryAsync"
+                                     OnArchive="ArchiveCategoryAsync"
+                                     OnDelete="DeleteCategoryAsync" />
+
+                    <Wallets Items="wallets"
+                             Saving="saving"
+                             BotUsername="@botUsername"
+                             OnCreate="CreateWalletAsync"
+                             OnJoin="JoinWalletAsync"
+                             LoadView="LoadWalletViewAsync"
+                             OnRegenerateInvite="RegenerateWalletInviteAsync"
+                             OnRemoveMember="RemoveWalletMemberAsync"
+                             OnLeave="LeaveWalletAsync"
+                             OnDelete="DeleteWalletAsync" />
+                    break;
+
+                default:
+                    <TransactionList Transactions="transactions"
+                                     Filter="historyFilter"
+                                     HasMore="hasMoreTransactions"
+                                     LoadingMore="loadingMoreTransactions"
+                                     OnFilterChanged="ChangeHistoryFilterAsync"
+                                     OnLoadMore="LoadMoreTransactionsAsync"
+                                     Categories="categories"
+                                     Tags="tags"
+                                     Wallets="wallets"
+                                     Rates="rates"
+                                     SelectedCurrency="@currency"
+                                     Saving="saving"
+                                     OnRefresh="RefreshAsync"
+                                     OnExport="ExportCsvAsync"
+                                     OnEdit="OpenEdit"
+                                     OnDelete="DeleteTransactionAsync" />
+                    break;
+            }
         }
     </div>
 
@@ -133,6 +152,12 @@
 
 @code {
     private const string ThemeStorageKey = "expensesTheme";
+
+    // Sections under the add form; the history is the default.
+    private const string TabHistory = "history";
+    private const string TabCharts = "charts";
+    private const string TabPlanning = "planning";
+    private const string TabManage = "manage";
 
     private enum Dialog { None, Help, Import, DeleteAccount, Edit }
 
@@ -170,6 +195,7 @@
     private int summaryRequest;
     private bool darkTheme;
     private Dialog dialog;
+    private string tab = TabHistory;
     private string? botUsername;
 
     // New transaction form and the transaction being edited
@@ -260,6 +286,14 @@
     }
 
     private Task RefreshAsync() => RunAsync(LoadAsync, T.ErrorRefresh);
+
+    private (string Value, string Label)[] Tabs() =>
+    [
+        (TabHistory, T.History),
+        (TabCharts, T.Charts),
+        (TabPlanning, T.Planning),
+        (TabManage, T.Manage)
+    ];
 
     // Targeted reloads: after a change, ask only for what it can affect.
 

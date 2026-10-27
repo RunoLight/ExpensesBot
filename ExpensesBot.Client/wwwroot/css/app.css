@@ -363,6 +363,46 @@ label,
     font-weight: 600;
 }
 
+/* === Section tabs === */
+.tab-bar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    padding: 4px;
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
+}
+
+.tab-bar__tab {
+    flex: 1;
+    min-width: 0;
+    padding: .625rem .25rem;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-text-soft);
+    font-size: var(--fs-md);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.tab-bar__tab:hover {
+    color: var(--color-text);
+}
+
+.tab-bar__tab--active {
+    background: var(--color-primary-soft);
+    color: var(--color-primary-text);
+}
+
 /* === Summary card === */
 .summary-card {
     margin-bottom: 20px;
@@ -916,7 +956,7 @@ label,
 }
 
 .history {
-    margin-top: 28px;
+    margin-top: 8px;
 }
 
 .history__heading {

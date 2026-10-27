@@ -1,0 +1,20 @@
+<nav class="tab-bar" role="tablist" aria-label="@Label">
+    @foreach (var (value, label) in Items)
+    {
+        <button type="button"
+                role="tab"
+                aria-selected="@(Selected == value ? "true" : "false")"
+                class="tab-bar__tab @(Selected == value ? "tab-bar__tab--active" : null)"
+                @onclick="() => OnSelected.InvokeAsync(value)">
+            @label
+        </button>
+    }
+</nav>
+
+@code {
+    /// <summary>Tabs as (value, visible label).</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<(string Value, string Label)> Items { get; set; } = [];
+    [Parameter] public string Selected { get; set; } = "";
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public EventCallback<string> OnSelected { get; set; }
+}

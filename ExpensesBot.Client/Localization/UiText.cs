@@ -236,6 +236,16 @@ public sealed class UiText
     public string HistoryEmpty => Pick("Add your first transaction with the form above or send an amount to the bot.",
         "Добавьте первую операцию в форме выше или отправьте сумму боту.");
     public string NothingFound => Pick("Nothing found", "Ничего не найдено");
+
+    // Sections
+
+    public string Sections => Pick("Sections", "Разделы");
+    public string Charts => Pick("Charts", "Графики");
+    public string Planning => Pick("Planning", "Планы");
+    public string Manage => Pick("Manage", "Управление");
+    public string NoChartData => Pick("No expenses in this period", "Нет расходов за этот период");
+    public string NoChartDataHint => Pick("Pick another period above or add an expense.",
+        "Выберите другой период выше или добавьте расход.");
     public string ShowMore => Pick("Show more", "Показать ещё");
     public string ChangeSearch => Pick("Try different search settings.", "Попробуйте изменить параметры поиска.");
     public string SharedWallet => Pick("shared wallet", "общий кошелёк");
