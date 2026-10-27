@@ -78,7 +78,7 @@ public sealed class BudgetService(ExpensesDbContext db)
             return amountError;
 
         if (request.EndDateUtc <= request.StartDateUtc)
-            return Error.Validation("End date must be after start date.");
+            return Error.Validation(t => t.EndBeforeStart);
 
         if (Rules.ValidateCurrency(request.Currency, out var currency) is { } currencyError)
             return currencyError;
@@ -90,7 +90,7 @@ public sealed class BudgetService(ExpensesDbContext db)
                 x => x.Id == request.CategoryId.Value && x.UserId == userId && !x.IsArchived, ct);
 
             if (category is null)
-                return Error.Validation("Category not found.");
+                return Error.Validation(t => t.CategoryNotFound);
         }
 
         var budget = new Budget
@@ -123,7 +123,7 @@ public sealed class BudgetService(ExpensesDbContext db)
             return amountError;
 
         if (request.EndDateUtc <= request.StartDateUtc)
-            return Error.Validation("End date must be after start date.");
+            return Error.Validation(t => t.EndBeforeStart);
 
         if (Rules.ValidateCurrency(request.Currency, out var currency) is { } currencyError)
             return currencyError;
@@ -139,7 +139,7 @@ public sealed class BudgetService(ExpensesDbContext db)
                 ct);
 
             if (category is null)
-                return Error.Validation("Category not found.");
+                return Error.Validation(t => t.CategoryNotFound);
         }
 
         var startUtc = DateTime.SpecifyKind(request.StartDateUtc, DateTimeKind.Utc);

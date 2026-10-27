@@ -82,7 +82,7 @@ public sealed class CategoryService(ExpensesDbContext db)
     {
         name = input?.Trim() ?? string.Empty;
         return name.Length is 0 or > Rules.MaxCategoryNameLength
-            ? Error.Validation($"Name must be 1-{Rules.MaxCategoryNameLength} characters.")
+            ? Error.Validation(t => t.NameLength(Rules.MaxCategoryNameLength))
             : null;
     }
 

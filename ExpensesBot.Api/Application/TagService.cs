@@ -25,7 +25,7 @@ public sealed partial class TagService(ExpensesDbContext db, TimeProvider clock)
             return nameError;
 
         if (await NameTakenAsync(userId, name, exceptId: null, ct))
-            return Error.Conflict("Tag with this name already exists.");
+            return Error.Conflict(t => t.TagExists);
 
         var tag = new Tag
         {
@@ -52,7 +52,7 @@ public sealed partial class TagService(ExpensesDbContext db, TimeProvider clock)
             return nameError;
 
         if (await NameTakenAsync(userId, name, exceptId: id, ct))
-            return Error.Conflict("Tag with this name already exists.");
+            return Error.Conflict(t => t.TagExists);
 
         tag.Name = name;
         tag.Color = NormalizeColor(request.Color) ?? tag.Color;
@@ -74,7 +74,7 @@ public sealed partial class TagService(ExpensesDbContext db, TimeProvider clock)
     {
         name = input?.Trim() ?? string.Empty;
         return name.Length is 0 or > Rules.MaxTagNameLength
-            ? Error.Validation($"Tag name must be 1-{Rules.MaxTagNameLength} characters.")
+            ? Error.Validation(t => t.NameLength(Rules.MaxTagNameLength))
             : null;
     }
 

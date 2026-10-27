@@ -18,6 +18,9 @@ public static class TelegramAuthenticationDefaults
     public const string DevelopmentUserHeader = "X-Dev-User-Id";
 
     public const string TelegramIdClaim = "telegram_id";
+
+    /// <summary>The user's profile language ("en"/"ru"): error messages are written in it.</summary>
+    public const string LanguageClaim = "language";
 }
 
 /// <summary>
@@ -76,7 +79,8 @@ public sealed class TelegramAuthenticationHandler(
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(TelegramAuthenticationDefaults.TelegramIdClaim, telegramUserId.ToString())
+            new Claim(TelegramAuthenticationDefaults.TelegramIdClaim, telegramUserId.ToString()),
+            new Claim(TelegramAuthenticationDefaults.LanguageClaim, user.Language)
         };
 
         var identity = new ClaimsIdentity(claims, Scheme.Name);

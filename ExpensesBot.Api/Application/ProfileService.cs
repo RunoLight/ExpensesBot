@@ -41,7 +41,7 @@ public sealed class ProfileService(ExpensesDbContext db)
     public async Task<Result<string>> SetLanguageAsync(long userId, SetLanguageRequest request, CancellationToken ct)
     {
         if (!Languages.TryNormalize(request.Language, out var language))
-            return Error.Validation($"Supported languages: {string.Join(", ", Languages.Supported)}.");
+            return Error.Validation(t => t.UnsupportedLanguage);
 
         var updated = await db.Users
             .Where(x => x.Id == userId)

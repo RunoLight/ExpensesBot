@@ -79,9 +79,9 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
     {
         var name = request.Name?.Trim();
         if (string.IsNullOrWhiteSpace(name) || name.Length > MaxNameLength)
-            return Error.Validation($"Name must be 1-{MaxNameLength} characters.");
+            return Error.Validation(t => t.NameLength(MaxNameLength));
 
-        if (Rules.ValidateAmount(request.TargetAmountMinor, "Target amount") is { } amountError)
+        if (Rules.ValidateAmount(request.TargetAmountMinor, t => t.TargetAmountInvalid) is { } amountError)
             return amountError;
 
         if (Rules.ValidateCurrency(request.Currency, out var currency) is { } currencyError)
@@ -94,7 +94,7 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
                 x => x.Id == request.CategoryId.Value && x.UserId == userId && !x.IsArchived, ct);
 
             if (category is null)
-                return Error.Validation("Category not found.");
+                return Error.Validation(t => t.CategoryNotFound);
         }
         else
         {
@@ -130,9 +130,9 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
 
         var name = request.Name?.Trim();
         if (string.IsNullOrWhiteSpace(name) || name.Length > MaxNameLength)
-            return Error.Validation($"Name must be 1-{MaxNameLength} characters.");
+            return Error.Validation(t => t.NameLength(MaxNameLength));
 
-        if (Rules.ValidateAmount(request.TargetAmountMinor, "Target amount") is { } amountError)
+        if (Rules.ValidateAmount(request.TargetAmountMinor, t => t.TargetAmountInvalid) is { } amountError)
             return amountError;
 
         goal.Name = name;
@@ -171,9 +171,9 @@ public sealed class GoalService(ExpensesDbContext db, TimeProvider clock)
             return Error.NotFound();
 
         if (!goal.IsActive)
-            return Error.Conflict("Goal is inactive.");
+            return Error.Conflict(t => t.GoalInactive);
 
-        if (Rules.ValidateAmount(request.AmountMinor, "Contribution") is { } amountError)
+        if (Rules.ValidateAmount(request.AmountMinor, t => t.ContributionInvalid) is { } amountError)
             return amountError;
 
         var now = clock.GetUtcNow().UtcDateTime;

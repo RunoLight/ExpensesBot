@@ -12,7 +12,7 @@ public sealed class ExpensesApiClient(HttpClient http)
     // Categories
 
     public async Task<List<CategoryDto>> GetCategoriesAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<CategoryDto>>("api/v1/categories", ct) ?? [];
+        await GetAsync<List<CategoryDto>>("api/v1/categories", ct) ?? [];
 
     public Task<CategoryDto> CreateCategoryAsync(string name, string? icon = null, CancellationToken ct = default) =>
         SendAsync<CategoryDto>(HttpMethod.Post, "api/v1/categories", new { Name = name, Icon = icon }, ct);
@@ -26,7 +26,7 @@ public sealed class ExpensesApiClient(HttpClient http)
     // Transactions
 
     public async Task<List<TransactionDto>> GetTransactionsAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<TransactionDto>>("api/v1/transactions?limit=50&offset=0", ct) ?? [];
+        await GetAsync<List<TransactionDto>>("api/v1/transactions?limit=50&offset=0", ct) ?? [];
 
     public Task<TransactionDto> CreateTransactionAsync(
         long amountMinor,
@@ -83,7 +83,7 @@ public sealed class ExpensesApiClient(HttpClient http)
         CancellationToken ct = default)
     {
         var url = $"api/v1/transactions/summary?mode={Uri.EscapeDataString(mode)}&currency={Uri.EscapeDataString(currency)}";
-        return await http.GetFromJsonAsync<UserSummaryDto>(url, ct) ?? UserSummaryDto.Empty(currency);
+        return await GetAsync<UserSummaryDto>(url, ct) ?? UserSummaryDto.Empty(currency);
     }
 
     public Task<byte[]> ExportCsvAsync(CancellationToken ct = default) =>
@@ -92,7 +92,7 @@ public sealed class ExpensesApiClient(HttpClient http)
     // Recurring transactions
 
     public async Task<List<RecurringTransactionDto>> GetRecurringTransactionsAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<RecurringTransactionDto>>("api/v1/recurring", ct) ?? [];
+        await GetAsync<List<RecurringTransactionDto>>("api/v1/recurring", ct) ?? [];
 
     public Task<RecurringTransactionDto> CreateRecurringTransactionAsync(
         long amountMinor,
@@ -121,7 +121,7 @@ public sealed class ExpensesApiClient(HttpClient http)
     // Budgets
 
     public async Task<List<BudgetDto>> GetBudgetsAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<BudgetDto>>("api/v1/budgets", ct) ?? [];
+        await GetAsync<List<BudgetDto>>("api/v1/budgets", ct) ?? [];
 
     public Task<BudgetDto> CreateBudgetAsync(
         long amountMinor,
@@ -162,12 +162,12 @@ public sealed class ExpensesApiClient(HttpClient http)
     // Exchange rates
 
     public async Task<List<ExchangeRateDto>> GetExchangeRatesAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<ExchangeRateDto>>("api/v1/exchange/rates", ct) ?? [];
+        await GetAsync<List<ExchangeRateDto>>("api/v1/exchange/rates", ct) ?? [];
 
     // Profile
 
     public async Task<UserProfileDto> GetProfileAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<UserProfileDto>("api/v1/profile", ct)
+        await GetAsync<UserProfileDto>("api/v1/profile", ct)
         ?? throw new InvalidOperationException("API returned an empty response.");
 
     public Task SetDefaultCurrencyAsync(string currency, CancellationToken ct = default) =>
@@ -183,7 +183,7 @@ public sealed class ExpensesApiClient(HttpClient http)
     // Goals
 
     public async Task<List<GoalDto>> GetGoalsAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<GoalDto>>("api/v1/goals", ct) ?? [];
+        await GetAsync<List<GoalDto>>("api/v1/goals", ct) ?? [];
 
     public Task<GoalDto> CreateGoalAsync(
         string name,
@@ -224,7 +224,7 @@ public sealed class ExpensesApiClient(HttpClient http)
     // Tags
 
     public async Task<List<TagDto>> GetTagsAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<TagDto>>("api/v1/tags", ct) ?? [];
+        await GetAsync<List<TagDto>>("api/v1/tags", ct) ?? [];
 
     public Task<TagDto> CreateTagAsync(string name, string color = "#36A2EB", CancellationToken ct = default) =>
         SendAsync<TagDto>(HttpMethod.Post, "api/v1/tags", new { Name = name, Color = color }, ct);
@@ -238,7 +238,7 @@ public sealed class ExpensesApiClient(HttpClient http)
     // Shared wallets
 
     public async Task<List<WalletDto>> GetWalletsAsync(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<WalletDto>>("api/v1/wallets", ct) ?? [];
+        await GetAsync<List<WalletDto>>("api/v1/wallets", ct) ?? [];
 
     public Task<WalletDto> CreateWalletAsync(string name, CancellationToken ct = default) =>
         SendAsync<WalletDto>(HttpMethod.Post, "api/v1/wallets", new { Name = name }, ct);
@@ -261,10 +261,10 @@ public sealed class ExpensesApiClient(HttpClient http)
     /// <summary>Members, this month's summary in <paramref name="currency"/> and the latest transactions.</summary>
     public async Task<WalletView> GetWalletViewAsync(long id, string currency, CancellationToken ct = default)
     {
-        var detailsTask = http.GetFromJsonAsync<WalletDetailsDto>($"api/v1/wallets/{id}", ct);
-        var summaryTask = http.GetFromJsonAsync<WalletSummaryDto>(
+        var detailsTask = GetAsync<WalletDetailsDto>($"api/v1/wallets/{id}", ct);
+        var summaryTask = GetAsync<WalletSummaryDto>(
             $"api/v1/wallets/{id}/summary?mode=month&currency={Uri.EscapeDataString(currency)}", ct);
-        var transactionsTask = http.GetFromJsonAsync<List<WalletTransactionDto>>($"api/v1/wallets/{id}/transactions?limit=20", ct);
+        var transactionsTask = GetAsync<List<WalletTransactionDto>>($"api/v1/wallets/{id}/transactions?limit=20", ct);
 
         await Task.WhenAll(detailsTask, summaryTask, transactionsTask);
 
@@ -275,6 +275,13 @@ public sealed class ExpensesApiClient(HttpClient http)
     }
 
     // Helpers
+
+    /// <summary>GET that reports failures as <see cref="ApiException"/> with the server's message.</summary>
+    private async Task<T?> GetAsync<T>(string url, CancellationToken ct)
+    {
+        using var response = await SendCoreAsync(HttpMethod.Get, url, null, ct);
+        return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
+    }
 
     private async Task SendAsync(HttpMethod method, string url, object? body, CancellationToken ct)
     {

@@ -179,7 +179,7 @@
         }
         catch (Exception ex)
         {
-            error = T.WithReason(T.ErrorLoadProfile, ex.Message);
+            error = T.WithReason(T.ErrorLoadProfile, ex);
         }
 
         await LoadAsync();
@@ -231,7 +231,7 @@
         }
         catch (Exception ex)
         {
-            error = T.WithReason(T.ErrorLoadData, ex.Message);
+            error = T.WithReason(T.ErrorLoadData, ex);
         }
         finally
         {
@@ -259,7 +259,7 @@
         catch (Exception ex)
         {
             if (request == summaryRequest)
-                error = T.WithReason(T.ErrorRefreshSummary, ex.Message);
+                error = T.WithReason(T.ErrorRefreshSummary, ex);
         }
         finally
         {
@@ -628,7 +628,7 @@
         }
         catch (Exception ex)
         {
-            error = T.WithReason(T.ErrorLoadWallet, ex.Message);
+            error = T.WithReason(T.ErrorLoadWallet, ex);
             StateHasChanged();
             return null;
         }
@@ -678,7 +678,7 @@
         }
         catch (Exception ex)
         {
-            error = T.WithReason(T.ErrorJoinFromLink, ex.Message);
+            error = T.WithReason(T.ErrorJoinFromLink, ex);
             return false;
         }
     }
@@ -781,7 +781,7 @@
         }
         catch (Exception ex)
         {
-            error = T.WithReason(errorPrefix, ex.Message);
+            error = T.WithReason(errorPrefix, ex);
             return false;
         }
         finally

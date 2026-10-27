@@ -1,3 +1,5 @@
+using ExpensesBot.Api.Authentication;
+
 namespace ExpensesBot.Api.Common;
 
 /// <summary>Maps service results to HTTP responses (RFC 9457 problem details for errors).</summary>
@@ -12,17 +14,25 @@ public static class ResultHttpExtensions
     public static IResult ToNoContent(this Result result) =>
         result.IsSuccess ? TypedResults.NoContent() : result.Error!.ToProblem();
 
-    public static IResult ToProblem(this Error error)
-    {
-        var (status, title) = error.Kind switch
-        {
-            ErrorKind.NotFound => (StatusCodes.Status404NotFound, "Not found"),
-            ErrorKind.Conflict => (StatusCodes.Status409Conflict, "Conflict"),
-            ErrorKind.Forbidden => (StatusCodes.Status403Forbidden, "Forbidden"),
-            ErrorKind.Unprocessable => (StatusCodes.Status422UnprocessableEntity, "Unprocessable request"),
-            _ => (StatusCodes.Status400BadRequest, "Invalid request")
-        };
+    /// <summary>The detail is written in the caller's language, decided when the response is sent.</summary>
+    public static IResult ToProblem(this Error error) => new LocalizedProblem(error);
 
-        return TypedResults.Problem(detail: error.Message, statusCode: status, title: title);
+    private sealed class LocalizedProblem(Error error) : IResult
+    {
+        public Task ExecuteAsync(HttpContext httpContext)
+        {
+            var (status, title) = error.Kind switch
+            {
+                ErrorKind.NotFound => (StatusCodes.Status404NotFound, "Not found"),
+                ErrorKind.Conflict => (StatusCodes.Status409Conflict, "Conflict"),
+                ErrorKind.Forbidden => (StatusCodes.Status403Forbidden, "Forbidden"),
+                ErrorKind.Unprocessable => (StatusCodes.Status422UnprocessableEntity, "Unprocessable request"),
+                _ => (StatusCodes.Status400BadRequest, "Invalid request")
+            };
+
+            return TypedResults
+                .Problem(detail: error.Describe(httpContext.GetErrorText()), statusCode: status, title: title)
+                .ExecuteAsync(httpContext);
+        }
     }
 }

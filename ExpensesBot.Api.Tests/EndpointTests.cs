@@ -244,6 +244,18 @@ public class TransactionsEndpointsTests(CustomWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task ValidationErrors_AreWrittenInTheUsersLanguage()
+    {
+        var client = factory.CreateClientForDevUser(100_027);
+        (await client.PutAsJsonAsync("/api/v1/profile/language", new { Language = "ru" })).EnsureSuccessStatusCode();
+
+        var response = await client.PostAsJsonAsync("/api/v1/transactions", Transaction(1_000, "EUR"));
+
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        problem.RootElement.GetProperty("detail").GetString().Should().Contain("Поддерживаемые валюты");
+    }
+
+    [Fact]
     public async Task DeleteAccount_RemovesTheUsersData()
     {
         var client = factory.CreateClientForDevUser(100_014);

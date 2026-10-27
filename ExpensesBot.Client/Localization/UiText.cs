@@ -353,6 +353,22 @@ public sealed class UiText
     // Errors shown in the banner: "<what failed>: <server message>"
 
     public string WithReason(string what, string reason) => $"{what}: {reason}";
+
+    /// <summary>
+    /// "&lt;what failed&gt;: &lt;why&gt;". API errors already arrive in the user's language;
+    /// network failures and anything unexpected get a translated reason instead of the
+    /// framework's English exception text.
+    /// </summary>
+    public string WithReason(string what, Exception error) => WithReason(what, error switch
+    {
+        Services.ApiException api => api.StatusCode == 429 ? TooManyRequests : api.Message,
+        HttpRequestException => NoConnection,
+        _ => UnexpectedError
+    });
+
+    public string NoConnection => Pick("no connection to the server", "нет связи с сервером");
+    public string TooManyRequests => Pick("too many requests, wait a little", "слишком много запросов, подождите немного");
+    public string UnexpectedError => Pick("unexpected error", "непредвиденная ошибка");
     public string ErrorLoadProfile => Pick("Couldn't load the profile", "Не удалось загрузить профиль");
     public string ErrorLoadData => Pick("Couldn't load data", "Не удалось загрузить данные");
     public string ErrorRefresh => Pick("Couldn't refresh", "Не удалось обновить");

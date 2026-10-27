@@ -45,19 +45,19 @@ public static class ExchangeEndpoints
         CancellationToken ct)
     {
         if (request.AmountMinor <= 0)
-            return Error.Validation("Amount must be positive.").ToProblem();
+            return Error.Validation(t => t.AmountInvalid).ToProblem();
 
         if (!Currencies.TryNormalize(request.FromCurrency, out var from) ||
             !Currencies.TryNormalize(request.ToCurrency, out var to))
         {
-            return Error.Validation($"Supported currencies: {Currencies.SupportedList}.").ToProblem();
+            return Error.Validation(t => t.UnsupportedCurrency).ToProblem();
         }
 
         var table = await provider.GetAsync(ct);
         var rate = table.GetRate(from, to);
 
         if (rate is null)
-            return Error.Validation($"No rate available for {from} -> {to}.").ToProblem();
+            return Error.Validation(t => t.NoRate(from, to)).ToProblem();
 
         var converted = table.Convert(request.AmountMinor, from, to)!.Value;
 

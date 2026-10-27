@@ -12,29 +12,30 @@ public static class Rules
     public const int MaxCategoryNameLength = 80;
     public const int MaxTagNameLength = 50;
 
-    public static Error? ValidateAmount(long amountMinor, string field = "Amount") =>
+    /// <param name="message">What to say when the amount is out of range; "the amount must be positive" by default.</param>
+    public static Error? ValidateAmount(long amountMinor, Func<ErrorText, string>? message = null) =>
         amountMinor <= 0 || amountMinor > MaxAmountMinor
-            ? Error.Validation($"{field} must be positive and within the allowed limit.")
+            ? Error.Validation(message ?? (t => t.AmountInvalid))
             : null;
 
     public static Error? ValidateCurrency(string? input, out string currency) =>
         Currencies.TryNormalize(input, out currency)
             ? null
-            : Error.Validation($"Supported currencies: {Currencies.SupportedList}.");
+            : Error.Validation(t => t.UnsupportedCurrency);
 
     /// <summary>Trims the note; empty notes become null.</summary>
     public static Error? ValidateNote(string? input, out string? note)
     {
         note = string.IsNullOrWhiteSpace(input) ? null : input.Trim();
         return note?.Length > MaxNoteLength
-            ? Error.Validation($"Note cannot exceed {MaxNoteLength} characters.")
+            ? Error.Validation(t => t.NoteTooLong(MaxNoteLength))
             : null;
     }
 
     /// <summary>An Idempotency-Key is 1–64 visible ASCII characters (a UUID fits comfortably).</summary>
     public static Error? ValidateIdempotencyKey(string key) =>
         key.Length is 0 or > Transaction.MaxIdempotencyKeyLength || key.Any(c => c is < '!' or > '~')
-            ? Error.Validation($"Idempotency-Key must be 1 to {Transaction.MaxIdempotencyKeyLength} visible ASCII characters.")
+            ? Error.Validation(t => t.IdempotencyKeyInvalid(Transaction.MaxIdempotencyKeyLength))
             : null;
 
     /// <summary>Treats unspecified DateTime values as UTC and converts local ones.</summary>

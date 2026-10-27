@@ -27,8 +27,8 @@ public static class TransactionsEndpoints
                 [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey) =>
             (await service.CreateAsync(user.GetUserId(), request, ct, idempotencyKey)).ToCreated(t => $"/api/v1/transactions/{t.Id}"));
 
-        group.MapPost("/bulk", async (List<CreateTransactionRequest>? requests, ClaimsPrincipal user, TransactionService service, CancellationToken ct) =>
-            (await service.BulkCreateAsync(user.GetUserId(), requests, ct)).ToOk());
+        group.MapPost("/bulk", async (List<CreateTransactionRequest>? requests, HttpContext context, TransactionService service, CancellationToken ct) =>
+            (await service.BulkCreateAsync(context.User.GetUserId(), requests, context.GetErrorText(), ct)).ToOk());
 
         group.MapPut("/{id:long}", async (long id, UpdateTransactionRequest request, ClaimsPrincipal user, TransactionService service, CancellationToken ct) =>
             (await service.UpdateAsync(user.GetUserId(), id, request, ct)).ToOk());

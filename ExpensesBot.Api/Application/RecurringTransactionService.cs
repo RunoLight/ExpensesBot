@@ -45,13 +45,13 @@ public sealed class RecurringTransactionService(ExpensesDbContext db, TimeProvid
             return currencyError;
 
         if (!Enum.IsDefined(request.Type))
-            return Error.Validation("Unknown transaction type.");
+            return Error.Validation(t => t.UnknownTransactionType);
 
         if (!Enum.TryParse<RecurrencePattern>(request.Pattern, ignoreCase: true, out var pattern) ||
             !Enum.IsDefined(pattern) ||
             pattern == RecurrencePattern.None)
         {
-            return Error.Validation("Pattern must be Daily, Weekly, Monthly or Yearly.");
+            return Error.Validation(t => t.UnknownPattern);
         }
 
         if (Rules.ValidateNote(request.Note, out var note) is { } noteError)
@@ -59,7 +59,7 @@ public sealed class RecurringTransactionService(ExpensesDbContext db, TimeProvid
 
         var category = await FindCategoryAsync(userId, request.CategoryId, ct);
         if (request.CategoryId.HasValue && category is null)
-            return Error.Validation("Category not found.");
+            return Error.Validation(t => t.CategoryNotFound);
 
         var recurring = new RecurringTransaction
         {
@@ -112,7 +112,7 @@ public sealed class RecurringTransactionService(ExpensesDbContext db, TimeProvid
         {
             var category = await FindCategoryAsync(userId, request.CategoryId, ct);
             if (category is null)
-                return Error.Validation("Category not found.");
+                return Error.Validation(t => t.CategoryNotFound);
 
             recurring.CategoryId = category.Id;
             recurring.Category = category;
@@ -152,7 +152,7 @@ public sealed class RecurringTransactionService(ExpensesDbContext db, TimeProvid
             return Error.NotFound();
 
         if (!recurring.IsActive)
-            return Error.Conflict("Recurring transaction is inactive.");
+            return Error.Conflict(t => t.RecurringInactive);
 
         var now = clock.GetUtcNow().UtcDateTime;
 
@@ -160,7 +160,7 @@ public sealed class RecurringTransactionService(ExpensesDbContext db, TimeProvid
         {
             recurring.IsActive = false;
             await db.SaveChangesAsync(ct);
-            return Error.Conflict("Recurring transaction has ended.");
+            return Error.Conflict(t => t.RecurringEnded);
         }
 
         var transaction = new Transaction

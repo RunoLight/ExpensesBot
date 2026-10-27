@@ -83,7 +83,7 @@ public sealed class WalletService(ExpensesDbContext db, ExchangeRateProvider exc
             return nameError;
 
         if (await db.WalletMembers.CountAsync(m => m.UserId == userId, ct) >= MaxWalletsPerUser)
-            return Error.Conflict($"You can be in at most {MaxWalletsPerUser} wallets.");
+            return Error.Conflict(t => t.TooManyWallets(MaxWalletsPerUser));
 
         var now = clock.GetUtcNow().UtcDateTime;
         var wallet = new Wallet
@@ -103,15 +103,15 @@ public sealed class WalletService(ExpensesDbContext db, ExchangeRateProvider exc
     public async Task<Result<WalletResponse>> JoinAsync(long userId, JoinWalletRequest request, CancellationToken ct)
     {
         if (await db.WalletMembers.CountAsync(m => m.UserId == userId, ct) >= MaxWalletsPerUser)
-            return Error.Conflict($"You can be in at most {MaxWalletsPerUser} wallets.");
+            return Error.Conflict(t => t.TooManyWallets(MaxWalletsPerUser));
 
         var result = await WalletInvites.JoinAsync(db, userId, request.Code, clock.GetUtcNow().UtcDateTime, ct);
 
         if (result.Status == JoinWalletStatus.NotFound)
-            return Error.NotFound("Invite code not found.");
+            return Error.NotFound(t => t.InviteNotFound);
 
         if (result.Status == JoinWalletStatus.Full)
-            return Error.Conflict($"The wallet already has {WalletInvites.MaxMembers} members.");
+            return Error.Conflict(t => t.WalletFull(WalletInvites.MaxMembers));
 
         // Joined now or earlier: either way the caller is a member.
         return (await GetAllAsync(userId, ct)).Single(w => w.Id == result.Wallet!.Id);
@@ -163,7 +163,7 @@ public sealed class WalletService(ExpensesDbContext db, ExchangeRateProvider exc
             return Error.NotFound();
 
         if (role == WalletRole.Owner)
-            return Error.Conflict("The owner can't leave the wallet; delete it instead.");
+            return Error.Conflict(t => t.OwnerCantLeave);
 
         await RemoveMembershipAsync(walletId, userId, ct);
         return Result.Success();
@@ -175,10 +175,10 @@ public sealed class WalletService(ExpensesDbContext db, ExchangeRateProvider exc
             return accessError;
 
         if (memberUserId == userId)
-            return Error.Validation("The owner can't remove themselves; delete the wallet instead.");
+            return Error.Validation(t => t.OwnerCantRemoveSelf);
 
         if (await RoleAsync(memberUserId, walletId, ct) is null)
-            return Error.NotFound("Member not found.");
+            return Error.NotFound(t => t.MemberNotFound);
 
         await RemoveMembershipAsync(walletId, memberUserId, ct);
         return Result.Success();
@@ -339,7 +339,7 @@ public sealed class WalletService(ExpensesDbContext db, ExchangeRateProvider exc
         {
             null => Error.NotFound(),
             WalletRole.Owner => null,
-            _ => Error.Forbidden("Only the wallet owner can do this.")
+            _ => Error.Forbidden(t => t.OwnerOnly)
         };
 
     /// <summary>Removes a member; their transactions in the wallet become personal again.</summary>
@@ -375,7 +375,7 @@ public sealed class WalletService(ExpensesDbContext db, ExchangeRateProvider exc
     {
         name = input?.Trim() ?? string.Empty;
         return name.Length is 0 or > MaxNameLength
-            ? Error.Validation($"Name must be 1-{MaxNameLength} characters.")
+            ? Error.Validation(t => t.NameLength(MaxNameLength))
             : null;
     }
 

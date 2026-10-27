@@ -117,7 +117,7 @@ public sealed class TransactionService(ExpensesDbContext db, TimeProvider clock)
                           existing.WalletId == request.WalletId;
 
         if (!sameRequest)
-            return Error.Unprocessable("This Idempotency-Key was already used for a different transaction.");
+            return Error.Unprocessable(t => t.IdempotencyKeyReused);
 
         return await GetAsync(userId, existing.Id, ct);
     }
@@ -126,16 +126,18 @@ public sealed class TransactionService(ExpensesDbContext db, TimeProvider clock)
     /// Validates every row; valid rows are saved together in one transaction and
     /// invalid ones are reported by index.
     /// </summary>
+    /// <param name="text">Language of the per-row error messages.</param>
     public async Task<Result<BulkCreateResponse>> BulkCreateAsync(
         long userId,
         List<CreateTransactionRequest>? requests,
+        ErrorText text,
         CancellationToken ct)
     {
         if (requests is null || requests.Count == 0)
-            return Error.Validation("No transactions provided.");
+            return Error.Validation(t => t.NoTransactions);
 
         if (requests.Count > MaxBulkSize)
-            return Error.Validation($"Maximum {MaxBulkSize} transactions per batch.");
+            return Error.Validation(t => t.TooManyTransactions(MaxBulkSize));
 
         var accepted = new List<(Transaction Transaction, string? CategoryName)>();
         var errors = new List<BulkError>();
@@ -146,7 +148,7 @@ public sealed class TransactionService(ExpensesDbContext db, TimeProvider clock)
             if (built.IsSuccess)
                 accepted.Add(built.Value);
             else
-                errors.Add(new BulkError(i, built.Error!.Message));
+                errors.Add(new BulkError(i, built.Error!.Describe(text)));
         }
 
         db.Transactions.AddRange(accepted.Select(x => x.Transaction));
@@ -189,7 +191,7 @@ public sealed class TransactionService(ExpensesDbContext db, TimeProvider clock)
                 ct);
 
             if (category is null)
-                return Error.Validation("Category does not exist or is unavailable.");
+                return Error.Validation(t => t.CategoryUnavailable);
         }
 
         transaction.AmountMinor = request.AmountMinor;
@@ -271,14 +273,14 @@ public sealed class TransactionService(ExpensesDbContext db, TimeProvider clock)
             return currencyError;
 
         if (!Enum.IsDefined(request.Type))
-            return Error.Validation("Unknown transaction type.");
+            return Error.Validation(t => t.UnknownTransactionType);
 
         if (Rules.ValidateNote(request.Note, out var note) is { } noteError)
             return noteError;
 
         var occurredAt = request.OccurredAtUtc ?? clock.GetUtcNow().UtcDateTime;
         if (occurredAt.Kind == DateTimeKind.Local)
-            return Error.Validation("OccurredAtUtc must be specified in UTC.");
+            return Error.Validation(t => t.DateNotUtc);
 
         Category? category = null;
         if (request.CategoryId is not null)
@@ -288,14 +290,14 @@ public sealed class TransactionService(ExpensesDbContext db, TimeProvider clock)
                 ct);
 
             if (category is null)
-                return Error.Validation("Category does not exist or is unavailable.");
+                return Error.Validation(t => t.CategoryUnavailable);
         }
 
         // Recording into a shared wallet requires being its member.
         if (request.WalletId is { } walletId &&
             !await db.WalletMembers.AnyAsync(m => m.WalletId == walletId && m.UserId == userId, ct))
         {
-            return Error.Validation("Wallet does not exist or you are not its member.");
+            return Error.Validation(t => t.NotWalletMember);
         }
 
         var transaction = new Transaction

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
+using ExpensesBot.Api.Authentication;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 
@@ -74,7 +75,7 @@ public static class ApiRateLimiting
                         {
                             Status = StatusCodes.Status429TooManyRequests,
                             Title = "Too many requests",
-                            Detail = "Too many requests. Wait a little and try again."
+                            Detail = context.HttpContext.GetErrorText().TooManyRequests
                         }
                     });
             };
