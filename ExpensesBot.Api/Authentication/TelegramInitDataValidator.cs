@@ -13,15 +13,17 @@ namespace ExpensesBot.Api.Authentication;
 public sealed class TelegramInitDataValidator
 {
     private readonly TimeSpan _maxAge;
+    private readonly TimeProvider _clock;
 
     public TelegramInitDataValidator()
         : this(TimeSpan.FromHours(24))
     {
     }
 
-    public TelegramInitDataValidator(TimeSpan maxAge)
+    public TelegramInitDataValidator(TimeSpan maxAge, TimeProvider? clock = null)
     {
         _maxAge = maxAge;
+        _clock = clock ?? TimeProvider.System;
     }
 
     public bool TryValidate(
@@ -98,7 +100,7 @@ public sealed class TelegramInitDataValidator
             return false;
         }
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = _clock.GetUtcNow().ToUnixTimeSeconds();
         var maxAgeSeconds = (long)_maxAge.TotalSeconds;
 
         if (authDate > now + 60 || now - authDate > maxAgeSeconds)
@@ -115,7 +117,7 @@ public sealed class TelegramInitDataValidator
 
         try
         {
-            using var userJson = JsonDocument.Parse(userValues[0]);
+            using var userJson = JsonDocument.Parse(userValues[0]!);
 
             if (!userJson.RootElement.TryGetProperty(
                     "id", out var idElement) ||

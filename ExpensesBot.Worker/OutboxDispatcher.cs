@@ -14,7 +14,8 @@ public sealed class OutboxDispatcher(
     ILogger<OutboxDispatcher> logger,
     IServiceProvider serviceProvider,
     IConfiguration configuration,
-    TelegramSender sender) : BackgroundService
+    TelegramSender sender,
+    TimeProvider clock) : BackgroundService
 {
     public const int MaxAttempts = 8;
     public const int BatchSize = 20;
@@ -53,14 +54,15 @@ public sealed class OutboxDispatcher(
                         await Task.Delay(DelayBetweenMessages, ct);
                         return result;
                     },
-                    DateTime.UtcNow,
+                    clock.GetUtcNow().UtcDateTime,
                     logger,
                     stoppingToken);
 
-                if (DateTime.UtcNow - _lastPruneUtc >= PruneInterval)
+                var now = clock.GetUtcNow().UtcDateTime;
+                if (now - _lastPruneUtc >= PruneInterval)
                 {
-                    await PruneAsync(db, DateTime.UtcNow, stoppingToken);
-                    _lastPruneUtc = DateTime.UtcNow;
+                    await PruneAsync(db, now, stoppingToken);
+                    _lastPruneUtc = now;
                 }
 
                 // A full batch means more may be waiting: continue right away.

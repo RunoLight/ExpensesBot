@@ -26,7 +26,7 @@ public class SummaryServiceTests : IDisposable
     private SummaryService CreateService()
     {
         var db = _database.CreateContext();
-        return new SummaryService(db, new ExchangeRateProvider(db), new FixedTimeProvider(Now));
+        return new SummaryService(db, new ExchangeRateProvider(db, new FixedTimeProvider(Now)), new FixedTimeProvider(Now));
     }
 
     [Fact]
@@ -143,7 +143,7 @@ public class TransactionServiceTests : IDisposable
             new Transaction { UserId = user.Id, AmountMinor = 2_000, Currency = "AMD", Note = "Groceries" });
 
         await using var db = _database.CreateContext();
-        var service = new TransactionService(db);
+        var service = new TransactionService(db, TimeProvider.System);
 
         (await service.GetPageAsync(user.Id, 50, 0, vacation.Id, default))
             .Should().ContainSingle().Which.Note.Should().Be("Hotel");

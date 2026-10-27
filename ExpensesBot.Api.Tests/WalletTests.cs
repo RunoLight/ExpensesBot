@@ -20,7 +20,7 @@ public class WalletServiceTests : IDisposable
     private readonly TestDatabase _database = new();
 
     private WalletService CreateService(ExpensesDbContext db) =>
-        new(db, new ExchangeRateProvider(db), new FixedTimeProvider(Now));
+        new(db, new ExchangeRateProvider(db, new FixedTimeProvider(Now)), new FixedTimeProvider(Now));
 
     [Fact]
     public async Task Create_MakesTheCallerOwner_WithAnInviteCode()
@@ -90,7 +90,7 @@ public class WalletServiceTests : IDisposable
         var stranger = await _database.AddUserAsync(2);
         await using var db = _database.CreateContext();
         var wallet = (await CreateService(db).CreateAsync(owner.Id, new CreateWalletRequest("Семья"), default)).Value!;
-        var transactions = new TransactionService(db);
+        var transactions = new TransactionService(db, TimeProvider.System);
 
         var own = await transactions.CreateAsync(owner.Id,
             new CreateTransactionRequest(1_000, "AMD", null, null, "Хлеб", WalletId: wallet.Id), default);
@@ -113,9 +113,9 @@ public class WalletServiceTests : IDisposable
         await service.JoinAsync(member.Id, new JoinWalletRequest(wallet.InviteCode!), default);
         await service.JoinAsync(englishMember.Id, new JoinWalletRequest(wallet.InviteCode!), default);
 
-        await new TransactionService(db).CreateAsync(owner.Id,
+        await new TransactionService(db, TimeProvider.System).CreateAsync(owner.Id,
             new CreateTransactionRequest(150_000, "AMD", null, null, "Продукты", WalletId: wallet.Id), default);
-        await new TransactionService(db).CreateAsync(owner.Id,
+        await new TransactionService(db, TimeProvider.System).CreateAsync(owner.Id,
             new CreateTransactionRequest(500, "AMD", null, null, "Личное"), default);
 
         var messages = await db.OutboxMessages.ToListAsync();

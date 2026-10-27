@@ -24,8 +24,9 @@ builder.Services.AddDbContext<ExpensesDbContext>(options =>
         builder.Configuration.GetConnectionString("ExpensesDatabase"))));
 
 // Authentication: Telegram Mini App initData (plus X-Dev-User-Id in Development).
-builder.Services.AddSingleton(_ => new TelegramInitDataValidator(
-    TimeSpan.FromHours(builder.Configuration.GetValue("Telegram:InitDataMaxAgeHours", 24))));
+builder.Services.AddSingleton(services => new TelegramInitDataValidator(
+    TimeSpan.FromHours(builder.Configuration.GetValue("Telegram:InitDataMaxAgeHours", 24)),
+    services.GetRequiredService<TimeProvider>()));
 builder.Services.AddScoped<UserProvisioning>();
 builder.Services
     .AddAuthentication(TelegramAuthenticationDefaults.Scheme)

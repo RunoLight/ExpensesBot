@@ -13,7 +13,8 @@ namespace ExpensesBot.Worker;
 public class Worker(
     ILogger<Worker> logger,
     IServiceProvider serviceProvider,
-    IConfiguration configuration) : BackgroundService
+    IConfiguration configuration,
+    TimeProvider clock) : BackgroundService
 {
     private static readonly TimeSpan MaintenanceInterval = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
@@ -41,10 +42,10 @@ public class Worker(
         {
             try
             {
-                if (DateTime.UtcNow - _lastMaintenanceUtc >= MaintenanceInterval)
+                if (clock.GetUtcNow().UtcDateTime - _lastMaintenanceUtc >= MaintenanceInterval)
                 {
                     await RunMaintenanceAsync(botToken, stoppingToken);
-                    _lastMaintenanceUtc = DateTime.UtcNow;
+                    _lastMaintenanceUtc = clock.GetUtcNow().UtcDateTime;
                 }
 
                 if (string.IsNullOrWhiteSpace(botToken))
@@ -131,7 +132,7 @@ public class Worker(
         using var scope = serviceProvider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
 
-        var now = DateTime.UtcNow;
+        var now = clock.GetUtcNow().UtcDateTime;
 
         var recurring = await db.RecurringTransactions
             .Include(x => x.User)
@@ -190,7 +191,7 @@ public class Worker(
         var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
         var ledger = new NotificationLedger(db);
 
-        var now = DateTime.UtcNow;
+        var now = clock.GetUtcNow().UtcDateTime;
         var today = now.Date;
         var tomorrow = today.AddDays(1);
         var todayKey = NotificationLedger.DateKey(today);

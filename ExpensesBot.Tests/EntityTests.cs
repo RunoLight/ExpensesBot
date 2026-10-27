@@ -182,7 +182,7 @@ public class DbContextTests
 
         var stored = db.Goals.FirstOrDefault(g => g.Id == goal.Id);
         stored.Should().NotBeNull();
-        stored!.TargetDateUtc.Value.Date.Should().Be(goal.TargetDateUtc.Value.Date);
+        stored!.TargetDateUtc!.Value.Date.Should().Be(goal.TargetDateUtc.Value.Date);
     }
 
     [Fact]

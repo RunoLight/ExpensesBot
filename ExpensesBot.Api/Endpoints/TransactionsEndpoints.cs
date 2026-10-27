@@ -40,11 +40,11 @@ public static class TransactionsEndpoints
                 string? mode = null, string? currency = null, DateTime? from = null, DateTime? to = null) =>
             service.GetAsync(user.GetUserId(), mode, currency, from, to, ct));
 
-        group.MapGet("/export", async (ClaimsPrincipal user, TransactionService service, CancellationToken ct,
+        group.MapGet("/export", async (ClaimsPrincipal user, TransactionService service, TimeProvider clock, CancellationToken ct,
                 DateTime? from = null, DateTime? to = null) =>
         {
             var csv = await service.ExportCsvAsync(user.GetUserId(), from, to, ct);
-            return TypedResults.File(csv, "text/csv", $"expenses_{DateTime.UtcNow:yyyyMMdd}.csv");
+            return TypedResults.File(csv, "text/csv", $"expenses_{clock.GetUtcNow():yyyyMMdd}.csv");
         });
 
         return app;

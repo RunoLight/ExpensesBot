@@ -172,7 +172,7 @@ public class TagEditingTests : IDisposable
     {
         var user = await _database.AddUserAsync();
         await using var db = _database.CreateContext();
-        var service = new TagService(db);
+        var service = new TagService(db, TimeProvider.System);
         var tag = (await service.CreateAsync(user.Id, new CreateTagRequest("отпуск", "#36A2EB"), default)).Value!;
 
         var result = await service.UpdateAsync(user.Id, tag.Id, new UpdateTagRequest(" Отпуск 2026 ", "#ff6384"), default);
@@ -186,7 +186,7 @@ public class TagEditingTests : IDisposable
     {
         var user = await _database.AddUserAsync();
         await using var db = _database.CreateContext();
-        var service = new TagService(db);
+        var service = new TagService(db, TimeProvider.System);
         var tag = (await service.CreateAsync(user.Id, new CreateTagRequest("еда", "#4BC0C0"), default)).Value!;
 
         var result = await service.UpdateAsync(user.Id, tag.Id, new UpdateTagRequest("еда", "red"), default);
@@ -199,7 +199,7 @@ public class TagEditingTests : IDisposable
     {
         var user = await _database.AddUserAsync();
         await using var db = _database.CreateContext();
-        var service = new TagService(db);
+        var service = new TagService(db, TimeProvider.System);
         await service.CreateAsync(user.Id, new CreateTagRequest("работа", "#36A2EB"), default);
         var tag = (await service.CreateAsync(user.Id, new CreateTagRequest("отпуск", "#36A2EB"), default)).Value!;
 
@@ -216,7 +216,7 @@ public class TagEditingTests : IDisposable
         var owner = await _database.AddUserAsync(1);
         var stranger = await _database.AddUserAsync(2);
         await using var db = _database.CreateContext();
-        var service = new TagService(db);
+        var service = new TagService(db, TimeProvider.System);
         var tag = (await service.CreateAsync(owner.Id, new CreateTagRequest("отпуск", "#36A2EB"), default)).Value!;
 
         (await service.UpdateAsync(stranger.Id, tag.Id, new UpdateTagRequest("чужой", "#36A2EB"), default))

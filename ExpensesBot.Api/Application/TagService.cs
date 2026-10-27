@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ExpensesBot.Api.Application;
 
-public sealed partial class TagService(ExpensesDbContext db)
+public sealed partial class TagService(ExpensesDbContext db, TimeProvider clock)
 {
     private const string DefaultColor = "#36A2EB";
 
@@ -32,7 +32,7 @@ public sealed partial class TagService(ExpensesDbContext db)
             UserId = userId,
             Name = name,
             Color = NormalizeColor(request.Color) ?? DefaultColor,
-            CreatedAtUtc = DateTime.UtcNow
+            CreatedAtUtc = clock.GetUtcNow().UtcDateTime
         };
 
         db.Tags.Add(tag);

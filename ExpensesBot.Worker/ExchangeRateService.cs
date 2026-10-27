@@ -17,7 +17,8 @@ namespace ExpensesBot.Worker;
 public sealed class ExchangeRateService(
     ILogger<ExchangeRateService> logger,
     IHttpClientFactory httpClientFactory,
-    IServiceProvider serviceProvider)
+    IServiceProvider serviceProvider,
+    TimeProvider clock)
 {
     private const string CbrUrl = "https://www.cbr-xml-daily.ru/daily_json.js";
 
@@ -36,7 +37,7 @@ public sealed class ExchangeRateService(
                 .Select(x => (DateTime?)x.FetchedAtUtc)
                 .FirstOrDefaultAsync(ct);
 
-            if (lastFetched is not null && DateTime.UtcNow - lastFetched.Value < RefreshInterval)
+            if (lastFetched is not null && clock.GetUtcNow().UtcDateTime - lastFetched.Value < RefreshInterval)
                 return;
 
             var http = httpClientFactory.CreateClient();
@@ -49,7 +50,7 @@ public sealed class ExchangeRateService(
                 return;
             }
 
-            await SaveRatesAsync(db, rubPerUnit, ct);
+            await SaveRatesAsync(db, rubPerUnit, clock.GetUtcNow().UtcDateTime, ct);
 
             logger.LogInformation(
                 "Exchange rates updated: 1 USD = {UsdAmd:F2} AMD, 1 RUB = {RubAmd:F3} AMD",
@@ -85,9 +86,9 @@ public sealed class ExchangeRateService(
     private static async Task SaveRatesAsync(
         ExpensesDbContext db,
         Dictionary<string, decimal> rubPerUnit,
+        DateTime now,
         CancellationToken ct)
     {
-        var now = DateTime.UtcNow;
         var rates = new List<ExchangeRate>();
 
         foreach (var from in Currencies.Supported)

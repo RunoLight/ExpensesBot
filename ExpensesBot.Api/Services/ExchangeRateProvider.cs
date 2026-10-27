@@ -9,7 +9,7 @@ namespace ExpensesBot.Api.Services;
 /// approximate built-in rates so conversion keeps working; the table reports
 /// that via <see cref="ExchangeRateTable.IsFallback"/>.
 /// </summary>
-public sealed class ExchangeRateProvider(ExpensesDbContext db)
+public sealed class ExchangeRateProvider(ExpensesDbContext db, TimeProvider clock)
 {
     // CBR does not publish on weekends/holidays, so allow a few days.
     public static readonly TimeSpan MaxAge = TimeSpan.FromDays(4);
@@ -24,7 +24,7 @@ public sealed class ExchangeRateProvider(ExpensesDbContext db)
 
     public async Task<ExchangeRateTable> GetAsync(CancellationToken ct = default)
     {
-        var cutoff = DateTime.UtcNow - MaxAge;
+        var cutoff = clock.GetUtcNow().UtcDateTime - MaxAge;
 
         var rows = await db.ExchangeRates
             .AsNoTracking()
@@ -54,7 +54,7 @@ public sealed class ExchangeRateProvider(ExpensesDbContext db)
             IsFallback: !hasAllPairs);
     }
 
-    private static ExchangeRateTable CreateFallback()
+    private ExchangeRateTable CreateFallback()
     {
         var rates = new Dictionary<(string From, string To), decimal>();
 
@@ -65,7 +65,7 @@ public sealed class ExchangeRateProvider(ExpensesDbContext db)
                 rates[(from, to)] = FallbackAmdPerUnit[from] / FallbackAmdPerUnit[to];
         }
 
-        return new ExchangeRateTable(rates, DateTime.UtcNow, IsFallback: true);
+        return new ExchangeRateTable(rates, clock.GetUtcNow().UtcDateTime, IsFallback: true);
     }
 }
 

@@ -11,7 +11,7 @@ using EntityTransactionType = ExpensesBot.Data.Entities.TransactionType;
 
 namespace ExpensesBot.Api.Application;
 
-public sealed class TransactionService(ExpensesDbContext db)
+public sealed class TransactionService(ExpensesDbContext db, TimeProvider clock)
 {
     public const int MaxBulkSize = 100;
 
@@ -276,7 +276,7 @@ public sealed class TransactionService(ExpensesDbContext db)
         if (Rules.ValidateNote(request.Note, out var note) is { } noteError)
             return noteError;
 
-        var occurredAt = request.OccurredAtUtc ?? DateTime.UtcNow;
+        var occurredAt = request.OccurredAtUtc ?? clock.GetUtcNow().UtcDateTime;
         if (occurredAt.Kind == DateTimeKind.Local)
             return Error.Validation("OccurredAtUtc must be specified in UTC.");
 
@@ -305,7 +305,7 @@ public sealed class TransactionService(ExpensesDbContext db)
             AmountMinor = request.AmountMinor,
             Currency = currency,
             OccurredAtUtc = DateTime.SpecifyKind(occurredAt, DateTimeKind.Utc),
-            CreatedAtUtc = DateTime.UtcNow,
+            CreatedAtUtc = clock.GetUtcNow().UtcDateTime,
             Note = note,
             Type = (EntityTransactionType)request.Type,
             WalletId = request.WalletId

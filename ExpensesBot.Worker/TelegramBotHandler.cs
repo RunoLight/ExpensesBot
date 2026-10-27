@@ -19,7 +19,8 @@ public sealed class TelegramBotHandler(
     IHttpClientFactory httpClientFactory,
     IServiceProvider serviceProvider,
     IConfiguration configuration,
-    BotRateLimiter rateLimiter)
+    BotRateLimiter rateLimiter,
+    TimeProvider clock)
 {
     private const decimal MaxAmount = BotEntryParser.MaxAmount;
     private const string LegacyConfirmPrefix = "confirm:"; // buttons sent by older versions
@@ -185,7 +186,7 @@ public sealed class TelegramBotHandler(
         await using var scope = serviceProvider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
 
-        var result = await WalletInvites.JoinAsync(db, user.Id, code, DateTime.UtcNow, ct);
+        var result = await WalletInvites.JoinAsync(db, user.Id, code, clock.GetUtcNow().UtcDateTime, ct);
 
         var text = result.Status switch
         {
@@ -453,7 +454,7 @@ public sealed class TelegramBotHandler(
         var db = scope.ServiceProvider.GetRequiredService<ExpensesDbContext>();
 
         var categories = await LoadCategoriesAsync(db, user.Id, ct);
-        var since = DateTime.UtcNow.AddDays(-90);
+        var since = clock.GetUtcNow().UtcDateTime.AddDays(-90);
 
         var usage = await db.Transactions
             .AsNoTracking()
@@ -553,7 +554,7 @@ public sealed class TelegramBotHandler(
         if (user is not null)
             return user;
 
-        user = UserFactory.Create(telegramUserId, firstName, Languages.FromTelegram(languageCode));
+        user = UserFactory.Create(telegramUserId, firstName, Languages.FromTelegram(languageCode), clock.GetUtcNow().UtcDateTime);
         db.Users.Add(user);
 
         try
@@ -589,6 +590,7 @@ public sealed class TelegramBotHandler(
                 .FirstOrDefaultAsync(ct)
             : null;
 
+        var now = clock.GetUtcNow().UtcDateTime;
         var transaction = new Transaction
         {
             UserId = user.Id,
@@ -597,8 +599,8 @@ public sealed class TelegramBotHandler(
             Currency = request.Currency ?? user.DefaultCurrency,
             Type = request.Type,
             Note = note ?? t.DefaultNote(request.Type),
-            OccurredAtUtc = DateTime.UtcNow,
-            CreatedAtUtc = DateTime.UtcNow
+            OccurredAtUtc = now,
+            CreatedAtUtc = now
         };
 
         db.Transactions.Add(transaction);
@@ -667,7 +669,7 @@ public sealed class TelegramBotHandler(
             return;
         }
 
-        var weekAgo = DateTime.UtcNow.AddDays(-7);
+        var weekAgo = clock.GetUtcNow().UtcDateTime.AddDays(-7);
 
         var totals = await db.Transactions
             .Where(t => t.UserId == user.Id &&
