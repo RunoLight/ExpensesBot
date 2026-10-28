@@ -160,11 +160,11 @@ flowchart LR
     Dev([git push master]) --> CI[GitHub Actions<br/>build + test]
     CI -- linux/arm64 images --> GHCR[(ghcr.io)]
     Pi[Raspberry Pi<br/>systemd timer] -- pull every 2 min --> GHCR
-    U([Mini App]) -- HTTPS --> CF[Cloudflare edge] -- tunnel --> CFD[cloudflared on the Pi] --> API[api container<br/>127.0.0.1:8080]
+    U([Mini App]) -- HTTPS --> CF[Cloudflare edge] -- tunnel --> CFD[cloudflared container] --> API[api container<br/>127.0.0.1:8080]
 ```
 
 - **CI/CD.** `ci.yml` runs the tests on every push; on `master` it then builds arm64 images on a native arm64 runner and pushes `ghcr.io/runolight/expensesbot-{api,worker}` tagged `latest` and the commit SHA. The Pi pulls new images itself (`update.sh` on `expensesbot-update.timer`), so no inbound access, deploy keys or self-hosted runner are needed — a self-hosted runner on a home device would run code from a public repository.
-- **No open ports.** The API binds to `127.0.0.1:8080`; the only way in is the Cloudflare Tunnel (`cloudflared` as a systemd service, locally managed tunnel, config in `deploy/raspberrypi/cloudflared-config.yml`).
+- **No open ports.** The API binds to `127.0.0.1:8080`; the only way in is the Cloudflare Tunnel (`cloudflared` as a service of the same compose stack, locally managed tunnel, config in `deploy/raspberrypi/cloudflared-config.yml`).
 - **Data.** SQLite on the `expensesbot_expenses-data` volume, backed up nightly with SQLite's online `.backup` (`backup.sh`, last 14 copies in `/opt/expensesbot/backups`).
 - **Rollback.** Set `IMAGE_TAG=<commit sha>` in `/opt/expensesbot/.env` and run `sudo systemctl start expensesbot-update`. Migrations only go forward, so rolling back past one also needs the backup from before it.
 

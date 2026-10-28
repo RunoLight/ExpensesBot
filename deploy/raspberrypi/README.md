@@ -67,7 +67,39 @@ sudo nano /opt/expensesbot/.env   # TELEGRAM_BOT_TOKEN, CLIENT_ORIGIN, WEBAPP_UR
 
 `.env` holds the bot token: it is readable by root only, and the systemd units that use it run as root. Edit it with `sudo`.
 
-## 4. First start
+## 4. Cloudflare Tunnel
+
+`cloudflared` runs as a service of the compose stack (image `cloudflare/cloudflared`), nothing is installed on the host. Its config and the tunnel credentials live in `/opt/expensesbot/cloudflared`, owned by the image's `nonroot` user (uid 65532). The one-off setup commands go through the `cloudflared-cli` service, which `up` never starts. From the checkout, as in step 3:
+
+```bash
+sudo install -d -o 65532 -g 65532 -m 700 /opt/expensesbot/cloudflared
+sudo cp deploy/raspberrypi/cloudflared-config.yml /opt/expensesbot/cloudflared/config.yml
+
+cd /opt/expensesbot
+sudo docker compose run --rm cloudflared-cli tunnel login                            # opens a link; pick the domain. Saves cloudflared/cert.pem
+sudo docker compose run --rm cloudflared-cli tunnel create expensesbot               # prints <tunnel-id>, writes cloudflared/<tunnel-id>.json
+sudo docker compose run --rm cloudflared-cli tunnel route dns expensesbot <hostname> # creates the CNAME in Cloudflare DNS
+sudo nano cloudflared/config.yml                        # replace <TUNNEL_ID> (twice) and the hostname
+```
+
+The ingress points at `http://api:8080`, the API container on the compose network. `<tunnel-id>.json` lets anyone run your tunnel and `cert.pem` lets them manage tunnels and DNS for the zone: keep copies in a password manager, never in git.
+
+**Moving from `cloudflared` on the host** (earlier versions of this runbook): copy the existing credentials, start the container, then remove the host service. The tunnel and its DNS record stay as they are, and both connectors serve the tunnel for a moment, so there is no downtime.
+
+```bash
+sudo cp deploy/raspberrypi/docker-compose.yml /opt/expensesbot/      # the version with the cloudflared service
+sudo install -d -o 65532 -g 65532 -m 700 /opt/expensesbot/cloudflared
+sudo cp /etc/cloudflared/<tunnel-id>.json /opt/expensesbot/cloudflared/
+sudo cp deploy/raspberrypi/cloudflared-config.yml /opt/expensesbot/cloudflared/config.yml
+sudo nano /opt/expensesbot/cloudflared/config.yml      # <TUNNEL_ID> (twice) and the hostname
+sudo chown 65532:65532 /opt/expensesbot/cloudflared/*
+sudo systemctl start expensesbot-update                 # starts the cloudflared container
+sudo docker compose -f /opt/expensesbot/docker-compose.yml logs cloudflared   # expect "Registered tunnel connection"
+sudo cloudflared service uninstall                      # stops and removes the host service
+sudo apt remove cloudflared                             # optional
+```
+
+## 5. First start
 
 ```bash
 cd /opt/expensesbot
@@ -75,44 +107,10 @@ sudo docker compose pull
 sudo docker compose up -d
 sudo docker compose ps
 curl -s http://127.0.0.1:8080/health
-```
-
-`/health` should report `database: Healthy` and `telegram: Healthy`. The API applies the database migrations on its first start.
-
-## 5. Cloudflare Tunnel
-
-Install `cloudflared` from Cloudflare's repository:
-
-```bash
-sudo mkdir -p --mode=0755 /usr/share/keyrings
-curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg > /dev/null
-echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" \
-  | sudo tee /etc/apt/sources.list.d/cloudflared.list
-sudo apt update && sudo apt install -y cloudflared
-```
-
-Create a locally managed tunnel and route the hostname to it:
-
-```bash
-cloudflared tunnel login                                # opens a link; pick the domain. Saves ~/.cloudflared/cert.pem
-cloudflared tunnel create expensesbot                   # prints <tunnel-id>, writes ~/.cloudflared/<tunnel-id>.json
-cloudflared tunnel route dns expensesbot <hostname>     # creates the CNAME in Cloudflare DNS
-```
-
-Install it as a service:
-
-```bash
-sudo mkdir -p /etc/cloudflared
-sudo cp ~/.cloudflared/<tunnel-id>.json /etc/cloudflared/
-sudo cp deploy/raspberrypi/cloudflared-config.yml /etc/cloudflared/config.yml
-sudo nano /etc/cloudflared/config.yml                   # replace <TUNNEL_ID> (twice) and the hostname
-sudo chmod 600 /etc/cloudflared/<tunnel-id>.json
-sudo cloudflared service install
-sudo systemctl enable --now cloudflared
 curl -s https://<hostname>/health
 ```
 
-`<tunnel-id>.json` lets anyone run your tunnel and `cert.pem` lets them manage tunnels and DNS for the zone: keep copies in a password manager, never in git.
+`/health` should report `database: Healthy` and `telegram: Healthy`. The API applies the database migrations on its first start. If the public address doesn't answer, check `sudo docker compose logs cloudflared`.
 
 ## 6. Automatic updates and backups
 
@@ -140,7 +138,7 @@ The backups sit on the same SD card as the database, so they don't survive a dea
 
 | Task | Command |
 |---|---|
-| Logs | `cd /opt/expensesbot && sudo docker compose logs -f api` (or `worker`) |
+| Logs | `cd /opt/expensesbot && sudo docker compose logs -f api` (or `worker`, `cloudflared`) |
 | Updater log | `journalctl -u expensesbot-update -n 50` |
 | Deploy now | `sudo systemctl start expensesbot-update` |
 | Health | `curl -s https://<hostname>/health` |

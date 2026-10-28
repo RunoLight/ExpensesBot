@@ -3,7 +3,7 @@
 # expensesbot-update.timer pulls new ones every two minutes (see update.sh).
 #
 # The API listens on 127.0.0.1:8080 only: the outside world reaches it through
-# the Cloudflare Tunnel (cloudflared on the host), never through an open port.
+# the Cloudflare Tunnel (the cloudflared service below), never through an open port.
 
 name: expensesbot
 
@@ -39,6 +39,27 @@ services:
     depends_on:
       - api
     restart: unless-stopped
+    logging: *logging
+
+  # Locally managed tunnel: config.yml and <tunnel-id>.json live in ./cloudflared,
+  # which must be owned by 65532 (the image's "nonroot" user). See the runbook, step 4.
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.5
+    command: tunnel run
+    volumes:
+      - ./cloudflared:/home/nonroot/.cloudflared:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+    logging: *logging
+
+  # One-off CLI for the tunnel setup, never started by `up`:
+  #   docker compose run --rm cloudflared-cli tunnel login
+  cloudflared-cli:
+    image: cloudflare/cloudflared:2026.10.5
+    profiles: [tools]
+    volumes:
+      - ./cloudflared:/home/nonroot/.cloudflared
     logging: *logging
 
 volumes:

@@ -1,9 +1,10 @@
-# /etc/cloudflared/config.yml — locally managed tunnel (created with the cloudflared CLI,
-# not in the Zero Trust dashboard). Replace <TUNNEL_ID> with the id from `cloudflared tunnel create`.
+# /opt/expensesbot/cloudflared/config.yml — locally managed tunnel (created with the cloudflared CLI,
+# not in the Zero Trust dashboard), run by the cloudflared service in docker-compose.yml.
+# Replace <TUNNEL_ID> with the id from `cloudflared tunnel create`.
 tunnel: <TUNNEL_ID>
-credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+credentials-file: /home/nonroot/.cloudflared/<TUNNEL_ID>.json
 
 ingress:
   - hostname: expensesbot.redlightforge.com
-    service: http://localhost:8080
+    service: http://api:8080
   - service: http_status:404
