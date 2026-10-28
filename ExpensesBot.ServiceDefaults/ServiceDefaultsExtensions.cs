@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -112,6 +113,10 @@ public static class ServiceDefaultsExtensions
     {
         app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = WriteReportAsync });
         app.MapHealthChecks("/alive", new HealthCheckOptions { Predicate = check => check.Tags.Contains(LiveTag) });
+
+        // Which build is running: shown in the Mini App's profile next to the client's own version.
+        var buildInfo = BuildInfo.FromAssembly(Assembly.Load(new AssemblyName(app.Environment.ApplicationName)));
+        app.MapGet("/version", () => buildInfo).ExcludeFromDescription();
         return app;
     }
 

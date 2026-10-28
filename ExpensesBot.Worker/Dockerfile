@@ -13,7 +13,9 @@ RUN dotnet restore ExpensesBot.Worker/ExpensesBot.Worker.csproj
 COPY ExpensesBot.Data/ ExpensesBot.Data/
 COPY ExpensesBot.ServiceDefaults/ ExpensesBot.ServiceDefaults/
 COPY ExpensesBot.Worker/ ExpensesBot.Worker/
-RUN dotnet publish ExpensesBot.Worker/ExpensesBot.Worker.csproj -c Release -o /app --no-restore
+# .git is not in the build context: CI passes the commit so /version can report it.
+ARG SOURCE_REVISION=
+RUN dotnet publish ExpensesBot.Worker/ExpensesBot.Worker.csproj -c Release -o /app --no-restore     -p:SourceRevisionId=$SOURCE_REVISION
 
 # aspnet, not runtime: ServiceDefaults (OpenTelemetry, health checks) uses the ASP.NET Core framework.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime

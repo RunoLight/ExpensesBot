@@ -5,6 +5,10 @@ namespace ExpensesBot.Client.Services;
 /// <summary>Thin wrapper over the Telegram Mini App JS API (wwwroot/js/telegram.js).</summary>
 public sealed class TelegramService(IJSRuntime js)
 {
+    /// <summary>Opens a web page in the browser (Telegram's in-app browser inside the Mini App).</summary>
+    public ValueTask OpenLinkAsync(string url) =>
+        js.InvokeVoidAsync("telegramApp.openLink", url);
+
     /// <summary>Tells Telegram the app is ready and expands it to full height.</summary>
     public ValueTask ReadyAsync() =>
         js.InvokeVoidAsync("telegramApp.ready");

@@ -55,6 +55,17 @@ window.telegramApp = {
         return window.confirm(message);
     },
 
+    // Inside Telegram a plain link would open in the Mini App's own webview; openLink
+    // hands it to the browser instead.
+    openLink: function (url) {
+        const webApp = window.Telegram?.WebApp;
+        if (webApp?.initData && webApp.openLink) {
+            webApp.openLink(url);
+        } else {
+            window.open(url, "_blank", "noopener");
+        }
+    },
+
     ready: function () {
         const webApp = window.Telegram?.WebApp;
         if (!webApp) {

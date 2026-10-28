@@ -23,6 +23,17 @@ public class HealthTests(CustomWebApplicationFactory factory) : IClassFixture<Cu
     }
 
     [Fact]
+    public async Task Version_ReportsTheApisBuild_WithoutAuthentication()
+    {
+        var info = await factory.CreateClient().GetFromJsonAsync<JsonElement>("/version");
+
+        var expected = typeof(Program).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .Cast<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion;
+        info.GetProperty("version").GetString().Should().Be(expected.Split('+')[0]);
+    }
+
+    [Fact]
     public async Task Alive_DoesNotRunDependencyChecks()
     {
         var response = await factory.CreateClient().GetAsync("/alive");

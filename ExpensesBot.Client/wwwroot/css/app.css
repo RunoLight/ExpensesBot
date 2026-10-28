@@ -134,6 +134,53 @@ a {
     gap: 8px;
 }
 
+.about {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+    padding-top: 14px;
+    border-top: 1px solid var(--color-border);
+    text-align: center;
+}
+
+.about__text {
+    margin: 0;
+    font-size: var(--fs-sm);
+}
+
+.about__links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin: 4px 0;
+}
+
+.about__link {
+    padding: .375rem .875rem;
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    color: var(--color-primary-text);
+    font-size: var(--fs-md);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.about__link:hover {
+    background: var(--color-bg);
+}
+
+.about__version {
+    margin: 0;
+    color: var(--color-text-soft);
+    font-size: var(--fs-xs);
+}
+
+.about__version a {
+    color: inherit;
+}
+
 .btn--outline-danger {
     border-color: var(--color-expense);
     color: var(--color-expense);

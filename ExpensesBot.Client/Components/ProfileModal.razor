@@ -38,6 +38,28 @@
         <p class="muted profile-section__hint">@T.DeleteAccountHint</p>
         <button type="button" class="btn btn--secondary btn--outline-danger" @onclick="OnDeleteAccount">@T.DeleteAccount</button>
     </section>
+
+    <footer class="about">
+        <p class="about__text">🔓 @T.OpenSource</p>
+        <p class="muted about__text">@T.FeedbackHint</p>
+        <div class="about__links">
+            <a class="about__link" href="@AppInfo.RepositoryUrl" target="_blank" rel="noopener"
+               @onclick="() => OpenAsync(AppInfo.RepositoryUrl)" @onclick:preventDefault>
+                &lt;/&gt; @T.SourceCode
+            </a>
+            <a class="about__link" href="@AppInfo.IssuesUrl" target="_blank" rel="noopener"
+               @onclick="() => OpenAsync(AppInfo.IssuesUrl)" @onclick:preventDefault>
+                💬 @T.LeaveFeedback
+            </a>
+        </div>
+        <p class="about__version">
+            @T.AppVersion @VersionLink(AppInfo.Client)
+            @if (serverVersion is not null)
+            {
+                <span> · @T.ServerVersion @VersionLink(serverVersion)</span>
+            }
+        </p>
+    </footer>
 </Modal>
 
 @code {
@@ -55,6 +77,35 @@
     [Parameter] public EventCallback OnExport { get; set; }
     [Parameter] public EventCallback OnDeleteAccount { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Loads the API's build; null when it can't be reached.</summary>
+    [Parameter] public Func<Task<VersionDto?>> LoadServerVersion { get; set; } = () => Task.FromResult<VersionDto?>(null);
+
+    [Inject] private TelegramService Telegram { get; set; } = default!;
+
+    private VersionDto? serverVersion;
+
+    protected override async Task OnInitializedAsync() => serverVersion = await LoadServerVersion();
+
+    private async Task OpenAsync(string url)
+    {
+        try
+        {
+            await Telegram.OpenLinkAsync(url);
+        }
+        catch (JSException)
+        {
+            // Without the JS bridge the link can't be opened programmatically; nothing to do.
+        }
+    }
+
+    /// <summary>"1.0.0 · 228c066", with the commit linking to it on GitHub.</summary>
+    private RenderFragment VersionLink(VersionDto version) =>
+        @<span>@version.Version@if (version.Commit is { } commit)
+        {
+            <text> · </text><a href="@AppInfo.CommitUrl(commit)" target="_blank" rel="noopener"
+                               @onclick="() => OpenAsync(AppInfo.CommitUrl(commit))" @onclick:preventDefault>@version.ShortCommit</a>
+        }</span>;
 
     private Task SetLanguageAsync(string language) =>
         language == T.Language ? Task.CompletedTask : OnLanguageChanged.InvokeAsync(language);

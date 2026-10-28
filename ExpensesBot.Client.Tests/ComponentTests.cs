@@ -2,7 +2,9 @@ using Bunit;
 using ExpensesBot.Client.Components;
 using ExpensesBot.Client.Localization;
 using ExpensesBot.Client.Models;
+using ExpensesBot.Client.Services;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ExpensesBot.Client.Tests.Components;
 
@@ -473,6 +475,7 @@ public class ProfileTests : BunitContext
     [Fact]
     public void Profile_HoldsCurrencyDataAndAccountDeletion()
     {
+        Services.AddScoped<TelegramService>();
         string? currency = null;
         var exported = false;
         var deleteRequested = false;
@@ -489,6 +492,40 @@ public class ProfileTests : BunitContext
         currency.Should().Be("USD");
         exported.Should().BeTrue();
         deleteRequested.Should().BeTrue();
+    }
+}
+
+public class AboutTests : BunitContext
+{
+    public AboutTests() => Services.AddScoped<TelegramService>();
+
+    [Fact]
+    public void Profile_ShowsVersions_AndLinksToTheRepositoryAndIssues()
+    {
+        var opened = new List<string>();
+        JSInterop.SetupVoid("telegramApp.openLink", invocation =>
+        {
+            opened.Add((string)invocation.Arguments[0]!);
+            return true;
+        });
+
+        var cut = Render<ProfileModal>(p => p
+            .Add(x => x.LoadServerVersion, () => Task.FromResult<VersionDto?>(new VersionDto("1.0.0", "228c06695e20da1fb4f2883aca9ddac739c9c478"))));
+
+        cut.Find(".about__version").TextContent.Should().Contain($"App {AppInfo.Client.Version}").And.Contain("Server 1.0.0 · 228c066");
+        cut.Find(".about__version a[href$='228c06695e20da1fb4f2883aca9ddac739c9c478']").Should().NotBeNull();
+        cut.Markup.Should().Contain("open source");
+
+        cut.Find("a:contains('Leave feedback')").Click();
+        opened.Should().Equal("https://github.com/RunoLight/ExpensesBot/issues");
+    }
+
+    [Fact]
+    public void UnreachableServer_LeavesOnlyTheAppVersion()
+    {
+        var cut = Render<ProfileModal>();
+
+        cut.Find(".about__version").TextContent.Should().NotContain("Server");
     }
 }
 
@@ -673,6 +710,7 @@ public class LanguageTests : BunitContext
     [Fact]
     public void Profile_LanguageButtons_PickTheOtherLanguage()
     {
+        Services.AddScoped<TelegramService>();
         string? picked = null;
         var cut = Render<ProfileModal>(p => p
             .AddCascadingValue(UiText.Ru)

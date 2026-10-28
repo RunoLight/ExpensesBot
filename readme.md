@@ -38,7 +38,7 @@ The Blazor client is plain Razor components and two stylesheets: no CSS framewor
 | Component | Purpose |
 |---|---|
 | `AppHeader` | Title, help and the profile button (showing the main currency) |
-| `ProfileModal` | Main currency, language, theme, CSV import and export, account deletion |
+| `ProfileModal` | Main currency, language, theme, CSV import and export, account deletion; at the bottom the open-source note, links to the repository and to issues for feedback, and the app and server versions |
 | `TabBar` | History / Charts / Planning / Manage sections under the add form |
 | `HelpModal` | In-app guide: bot notifications, bot commands, currencies, recurring rules, budgets, goals |
 | `Modal` | Overlay + card with title, close button and optional action buttons |
@@ -211,7 +211,7 @@ GitHub Actions runs build and tests on every push and pull request (`.github/wor
 | GET/POST/PUT/DELETE | `/api/v1/wallets[/{id}]`, `POST /join`, `POST /{id}/invite`, `POST /{id}/leave`, `DELETE /{id}/members/{userId}` | Shared wallets and membership |
 | GET | `/api/v1/wallets/{id}/transactions`, `/api/v1/wallets/{id}/summary` | Wallet transactions with authors; totals per member and category |
 
-Every route is versioned in the path (`/api/v1/…`). In Development the OpenAPI document is served per version at `/openapi/v1.json` and the [Scalar](https://scalar.com) UI at `/scalar` (choose the `DevUser` scheme and enter any id to try requests). `/health` (JSON report: database, Telegram) and `/alive` are public and unversioned.
+Every route is versioned in the path (`/api/v1/…`). In Development the OpenAPI document is served per version at `/openapi/v1.json` and the [Scalar](https://scalar.com) UI at `/scalar` (choose the `DevUser` scheme and enter any id to try requests). `/health` (JSON report: database, Telegram), `/alive` and `/version` (the running build: version and commit, shown in the Mini App's profile next to the client's own) are public and unversioned.
 
 ## Roadmap
 

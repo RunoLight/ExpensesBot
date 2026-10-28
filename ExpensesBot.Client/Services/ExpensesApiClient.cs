@@ -319,6 +319,12 @@ public sealed class ExpensesApiClient(HttpClient http)
             transactionsTask.Result ?? []);
     }
 
+    // About
+
+    /// <summary>The API's build, to show next to the client's own.</summary>
+    public async Task<VersionDto?> GetServerVersionAsync(CancellationToken ct = default) =>
+        await GetAsync<VersionDto>("version", ct);
+
     // Helpers
 
     /// <summary>GET that reports failures as <see cref="ApiException"/> with the server's message.</summary>

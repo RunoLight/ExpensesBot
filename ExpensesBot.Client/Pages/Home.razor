@@ -135,6 +135,7 @@
                           OnImport="() => dialog = Dialog.Import"
                           OnExport="ExportCsvAsync"
                           OnDeleteAccount="() => dialog = Dialog.DeleteAccount"
+                          LoadServerVersion="LoadServerVersionAsync"
                           OnClose="CloseDialog" />
             break;
 
@@ -877,6 +878,19 @@
     }
 
     // Account
+
+    private async Task<VersionDto?> LoadServerVersionAsync()
+    {
+        try
+        {
+            return await Api.GetServerVersionAsync();
+        }
+        catch (Exception)
+        {
+            // The version line is informational: an unreachable API just leaves it out.
+            return null;
+        }
+    }
 
     private Task DeleteAccountAsync() =>
         RunAsync(async () =>

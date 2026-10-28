@@ -89,6 +89,14 @@ public sealed class UiText
     public string YourData => Pick("Your data", "Ваши данные");
     public string ExportCsvLabel => Pick("Export CSV", "Экспорт CSV");
     public string DangerZone => Pick("Danger zone", "Опасная зона");
+    public string OpenSource => Pick("ExpensesBot is open source under the MIT license.",
+        "ExpensesBot — проект с открытым исходным кодом под лицензией MIT.");
+    public string SourceCode => Pick("Source code", "Исходный код");
+    public string LeaveFeedback => Pick("Leave feedback", "Оставить отзыв");
+    public string FeedbackHint => Pick("Found a bug or have an idea? Open an issue on GitHub.",
+        "Нашли ошибку или есть идея? Создайте issue на GitHub.");
+    public string AppVersion => Pick("App", "Приложение");
+    public string ServerVersion => Pick("Server", "Сервер");
     public string DeleteAccountHint => Pick("Deletes every transaction, category, budget, goal and tag. This can't be undone.",
         "Удаляет все операции, категории, бюджеты, цели и теги. Отменить нельзя.");
     public string Loading => Pick("Loading…", "Загружаем данные...");
